@@ -59,3 +59,14 @@ create policy "participants update requests" on public.connection_requests for u
 drop policy if exists "payment participants can read own payments" on public.service_payments;
 create policy "payment participants can read own payments" on public.service_payments for select using (exists (select 1 from public.connection_requests r where r.id = connection_request_id and (r.customer_id = auth.uid() or r.employee_id = auth.uid())));
 -- No browser insert/update policy for payments: trusted server/webhook only.
+
+
+-- Safe public discovery surface: exposes only fields intended for employee cards.
+-- The underlying profiles table keeps phone numbers private.
+create or replace view public.approved_employee_cards as
+ select ep.id, p.display_name, p.gender, ep.bio, ep.service_area,
+        ep.short_price_etb, ep.long_price_etb, ep.avatar_url
+ from public.employee_profiles ep
+ join public.profiles p on p.id = ep.id
+ where ep.status = 'approved' and p.role = 'employee' and p.is_adult = true;
+grant select on public.approved_employee_cards to anon, authenticated;
