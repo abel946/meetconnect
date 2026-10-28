@@ -49,13 +49,25 @@ create policy "profile owner can insert" on public.profiles for insert with chec
 drop policy if exists "profile owner can update" on public.profiles;
 create policy "profile owner can update" on public.profiles for update using (auth.uid() = id and role <> 'admin') with check (auth.uid() = id and role <> 'admin');
 drop policy if exists "employee can manage own listing" on public.employee_profiles;
-create policy "employee can manage own listing" on public.employee_profiles for all using (auth.uid() = id) with check (auth.uid() = id);
+drop policy if exists "employee can create pending listing" on public.employee_profiles;
+drop policy if exists "employee can update pending listing" on public.employee_profiles;
+create policy "employee can create pending listing" on public.employee_profiles
+ for insert with check (auth.uid() = id and status = 'pending');
+create policy "employee can update pending listing" on public.employee_profiles
+ for update using (auth.uid() = id and status = 'pending')
+ with check (auth.uid() = id and status = 'pending');
 drop policy if exists "participants read requests" on public.connection_requests;
 create policy "participants read requests" on public.connection_requests for select using (auth.uid() = customer_id or auth.uid() = employee_id);
 drop policy if exists "customers create requests" on public.connection_requests;
-create policy "customers create requests" on public.connection_requests for insert with check (auth.uid() = customer_id);
+create policy "customers create requests" on public.connection_requests for insert with check (
+ auth.uid() = customer_id
+ and exists (select 1 from public.profiles p where p.id = customer_id and p.role = 'customer' and p.is_adult = true)
+ and exists (select 1 from public.employee_profiles ep join public.profiles p on p.id = ep.id
+             where ep.id = employee_id and ep.status = 'approved' and p.role = 'employee' and p.is_adult = true)
+);
+-- Request status changes are intentionally server-managed until participant-safe
+-- transition rules are implemented. Do not grant broad client-side update access.
 drop policy if exists "participants update requests" on public.connection_requests;
-create policy "participants update requests" on public.connection_requests for update using (auth.uid() = customer_id or auth.uid() = employee_id) with check (auth.uid() = customer_id or auth.uid() = employee_id);
 drop policy if exists "payment participants can read own payments" on public.service_payments;
 create policy "payment participants can read own payments" on public.service_payments for select using (exists (select 1 from public.connection_requests r where r.id = connection_request_id and (r.customer_id = auth.uid() or r.employee_id = auth.uid())));
 -- No browser insert/update policy for payments: trusted server/webhook only.
