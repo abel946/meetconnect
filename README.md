@@ -24,3 +24,10 @@ The customer app now has a phone-only onboarding preview: 18+ confirmation, name
 Preview deployment: https://meetconnect-ehb2ay2lt-abemelekbekele375-5949.vercel.app
 
 **Important:** This is still a frontend prototype. Signup details and requests are stored only in the browser and are not secure server accounts. Employee profiles are sample records, the map is illustrative (not a live GPS/map service), and connection, messaging, report/block, moderation, and payments need secure backend implementation before public launch.
+
+
+## Employee-set pricing and commission (2026-10-28)
+
+Employees choose their own short and long session prices. The customer preview displays different example prices per demo employee. MeetConnect's planned commission is fixed at 10% of a successfully paid session; the employee receives 90% before payment-provider fees and applicable taxes. The employee portal includes editable price fields and a local calculation preview, and the admin console displays the policy. Price edits are still local-only until the shared Supabase backend is migrated and connected.
+
+Shared backend migration and setup instructions: [shared backend setup](docs/shared-backend-setup.md) and [Supabase migration](supabase/migrations/20261028_meetconnect_shared.sql).
