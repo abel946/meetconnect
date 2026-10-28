@@ -1,0 +1,40 @@
+name: MeetConnect build checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build ${{ matrix.app.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - name: Customer app
+            directory: .
+          - name: Employee portal
+            directory: apps/employee
+          - name: Admin console
+            directory: apps/admin
+    defaults:
+      run:
+        working-directory: ${{ matrix.app.directory }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build application
+        run: npm run build
