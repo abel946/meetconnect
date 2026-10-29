@@ -6,6 +6,48 @@ import './style.css';
 const url=import.meta.env.VITE_SUPABASE_URL,key=import.meta.env.VITE_SUPABASE_ANON_KEY;
 const db=url&&key?createClient(url,key):null;
 
+
+function DemoApp(){
+ const [tab,setTab]=React.useState('Overview');
+ const [q,setQ]=React.useState('');
+ const [filter,setFilter]=React.useState('All');
+ const sample=[
+  {name:'Mekdes T.',kind:'Employee',area:'Bole, Addis Ababa',status:'Pending',note:'Profile review'},
+  {name:'Dawit K.',kind:'Employee',area:'Piazza, Addis Ababa',status:'Approved',note:'Verified demo profile'},
+  {name:'Hana A.',kind:'User',area:'Hawassa',status:'Active',note:'Customer demo profile'},
+  {name:'Samuel B.',kind:'Employee',area:'Kazanchis, Addis Ababa',status:'Rejected',note:'Needs profile updates'},
+  {name:'Liya M.',kind:'User',area:'Adama',status:'Active',note:'Customer demo profile'},
+  {name:'Abel D.',kind:'Employee',area:'CMC, Addis Ababa',status:'Suspended',note:'Sample moderation case'}
+ ];
+ const reports=[
+  {name:'Sample report #MC-104',kind:'Profile concern',area:'Demo account',status:'Open'},
+  {name:'Sample report #MC-102',kind:'Inappropriate message',area:'Demo account',status:'Reviewing'},
+  {name:'Sample report #MC-099',kind:'Suspicious activity',area:'Demo account',status:'Resolved'}
+ ];
+ const visible=sample.filter(p=>(tab==='Employees'?p.kind==='Employee':tab==='Users'?p.kind==='User':true)&&((p.name+' '+p.area+' '+p.status).toLowerCase().includes(q.toLowerCase()))&&(filter==='All'||p.status.toLowerCase()===filter.toLowerCase()));
+ const nav=['Overview','Employees','Users','Reports & safety'];
+ const card=(label,value,sub,icon)=> <article style={{background:'#fff',border:'1px solid #e5eaf1',borderRadius:18,padding:20,boxShadow:'0 8px 24px #14213d08'}}><div style={{color:'#667085',fontSize:13}}>{icon}　{label}</div><strong style={{display:'block',fontSize:30,margin:'12px 0 5px',color:'#172b4d'}}>{value}</strong><small style={{color:'#667085'}}>{sub}</small></article>;
+ const badge=s=><span style={{display:'inline-block',padding:'5px 9px',borderRadius:20,fontSize:12,background:s==='Approved'||s==='Active'||s==='Resolved'?'#dcfce7':s==='Pending'||s==='Open'?'#fef3c7':s==='Rejected'||s==='Suspended'?'#fee2e2':'#e0e7ff',color:s==='Approved'||s==='Active'||s==='Resolved'?'#166534':s==='Pending'||s==='Open'?'#92400e':s==='Rejected'||s==='Suspended'?'#991b1b':'#3730a3'}}>{s}</span>;
+ return <div style={{minHeight:'100vh',background:'#f5f7fb',color:'#182230',fontFamily:'Inter,system-ui,sans-serif'}}>
+  <div style={{background:'#101b35',color:'white',padding:'12px 20px',textAlign:'center',fontSize:13}}>DEMO MODE · Sample data only · No real user information or controls</div>
+  <div style={{display:'grid',gridTemplateColumns:'230px minmax(0,1fr)',minHeight:'calc(100vh - 42px)'}}>
+   <aside style={{background:'#fff',padding:22,borderRight:'1px solid #e5eaf1'}}>
+    <div style={{display:'flex',gap:10,alignItems:'center',marginBottom:34}}><b style={{background:'#4f46e5',color:'#fff',borderRadius:12,padding:'10px 13px',fontSize:20}}>M</b><span><b style={{display:'block'}}>MeetConnect</b><small style={{color:'#667085',letterSpacing:1}}>ADMIN DEMO</small></span></div>
+    <small style={{color:'#667085',letterSpacing:1}}>WORKSPACE</small>
+    {nav.map(n=><button key={n} onClick={()=>setTab(n)} style={{display:'flex',width:'100%',marginTop:8,padding:'12px 10px',border:0,borderRadius:10,textAlign:'left',background:tab===n?'#eef2ff':'transparent',color:tab===n?'#4338ca':'#475467',fontWeight:600,cursor:'pointer'}}>{n}</button>)}
+    <div style={{marginTop:40,padding:13,background:'#f0fdf4',borderRadius:12,fontSize:12,color:'#166534'}}><b>🔒 Safe preview</b><p style={{lineHeight:1.5}}>Actions are disabled. This demo never changes live accounts.</p></div>
+   </aside>
+   <main style={{padding:'28px clamp(16px,3vw,40px)',maxWidth:1400,width:'100%',boxSizing:'border-box',margin:'0 auto'}}>
+    <div style={{display:'flex',justifyContent:'space-between',gap:16,alignItems:'center',flexWrap:'wrap'}}><div><small style={{color:'#4f46e5',fontWeight:700,letterSpacing:1}}>PLATFORM MANAGEMENT · DEMO</small><h1 style={{fontSize:30,margin:'8px 0'}}>{tab==='Overview'?'MeetConnect dashboard':tab}</h1><p style={{color:'#667085',marginTop:0}}>Explore the admin experience with fictional sample records.</p></div><span style={{background:'#e0e7ff',color:'#3730a3',padding:'9px 12px',borderRadius:20,fontSize:12,fontWeight:700}}>INVESTOR PREVIEW</span></div>
+    {tab==='Overview'&&<div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:14,margin:'24px 0'}}>{card('Sample profiles','6','Fictional records only','👥')}{card('Pending review','1','Example review queue','🕒')}{card('Approved employees','1','Sample approved profiles','✓')}{card('Demo reports','3','Illustrative safety cases','🛡️')}</div>}
+    {tab==='Reports & safety'?<section style={{background:'#fff',border:'1px solid #e5eaf1',borderRadius:16,padding:18,marginTop:22}}><h2>Reports & safety queue</h2><p style={{color:'#667085'}}>Illustrative cases for demonstration; no real reports are loaded.</p><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',textAlign:'left'}}><thead><tr>{['REPORT','CATEGORY','SOURCE','STATUS'].map(x=><th key={x} style={{padding:12,borderBottom:'1px solid #e5eaf1',fontSize:12,color:'#667085'}}>{x}</th>)}</tr></thead><tbody>{reports.map(r=><tr key={r.name}>{[r.name,r.kind,r.area].map(x=><td key={x} style={{padding:13,borderBottom:'1px solid #eef1f6'}}>{x}</td>)}<td style={{padding:13,borderBottom:'1px solid #eef1f6'}}>{badge(r.status)}</td></tr>)}</tbody></table></div></section>:<section style={{background:'#fff',border:'1px solid #e5eaf1',borderRadius:16,padding:18,marginTop:22}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:12,flexWrap:'wrap'}}><div><h2 style={{marginBottom:4}}>{tab==='Overview'?'Recent sample profiles':tab+' management'}</h2><p style={{color:'#667085',marginTop:0}}>Search and filter fictional records. All actions are read-only.</p></div><span style={{background:'#f2f4f7',padding:'7px 10px',borderRadius:10,fontSize:12}}>READ ONLY</span></div><div style={{display:'flex',gap:10,margin:'18px 0',flexWrap:'wrap'}}><input aria-label="Search sample records" value={q} onChange={e=>setQ(e.target.value)} placeholder="Search name, area, status…" style={{flex:1,minWidth:190,padding:12,border:'1px solid #d0d5dd',borderRadius:10}}/><select aria-label="Filter status" value={filter} onChange={e=>setFilter(e.target.value)} style={{padding:12,border:'1px solid #d0d5dd',borderRadius:10}}>{['All','Pending','Approved','Rejected','Suspended','Active'].map(s=><option key={s}>{s}</option>)}</select></div><div style={{overflowX:'auto'}}><table style={{width:'100%',borderCollapse:'collapse',textAlign:'left'}}><thead><tr>{['PROFILE','TYPE','AREA','STATUS','ACTION'].map(x=><th key={x} style={{padding:12,borderBottom:'1px solid #e5eaf1',fontSize:12,color:'#667085'}}>{x}</th>)}</tr></thead><tbody>{visible.map(p=><tr key={p.name}><td style={{padding:13,borderBottom:'1px solid #eef1f6'}}><b>{p.name}</b><small style={{display:'block',color:'#667085',marginTop:4}}>{p.note}</small></td><td style={{padding:13,borderBottom:'1px solid #eef1f6'}}>{p.kind}</td><td style={{padding:13,borderBottom:'1px solid #eef1f6'}}>{p.area}</td><td style={{padding:13,borderBottom:'1px solid #eef1f6'}}>{badge(p.status)}</td><td style={{padding:13,borderBottom:'1px solid #eef1f6'}}><button disabled title="Disabled in demo mode" style={{padding:'7px 10px',border:0,borderRadius:8,background:'#f2f4f7',color:'#667085'}}>View only</button></td></tr>)}</tbody></table>{visible.length===0&&<p style={{padding:18,color:'#667085'}}>No sample records match.</p>}</div></section>}
+    <section style={{marginTop:18,padding:16,border:'1px solid #dbeafe',background:'#eff6ff',borderRadius:14,color:'#1e40af'}}><b>Commission model</b><p style={{marginBottom:0,lineHeight:1.6}}>MeetConnect’s proposed model: 10% platform commission on completed paid sessions, with 90% allocated to the employee before applicable payment-provider fees and taxes.</p></section>
+    <footer style={{padding:'24px 0',fontSize:12,color:'#667085'}}>MeetConnect · Public demo · Fictional data · No real account access</footer>
+   </main>
+  </div>
+ </div>
+}
+
 function Brand(){return <div className="brand"><b className="logo">M</b><span><strong>MeetConnect</strong><small>ADMIN CONSOLE</small></span></div>}
 function App(){
  const [tab,T]=React.useState('Overview'),[email,E]=React.useState(''),[sent,S]=React.useState(false),[busy,B]=React.useState(false),[session,SS]=React.useState(null),[admin,SA]=React.useState(false),[loading,L]=React.useState(true),[q,Q]=React.useState(''),[filter,F]=React.useState('All'),[data,D]=React.useState([]),[notice,N]=React.useState(''),[refreshing,R]=React.useState(false);
@@ -18,6 +60,7 @@ function App(){
  async function statusChange(id,status){if(!admin)return say('Administrator permission required.');const {error}=await db.from('employee_profiles').update({status}).eq('id',id);if(error)return say('Could not update status: '+error.message);say('Employee status updated to '+status+'.');await load(session)}
  const employees=data.filter(x=>x.kind==='Employee'),users=data.filter(x=>x.kind==='User'),pending=employees.filter(x=>x.status==='pending').length,approved=employees.filter(x=>x.status==='approved').length;
  const visible=data.filter(p=>(tab==='Employees'?p.kind==='Employee':tab==='Users'?p.kind==='User':true)&&((p.name+' '+p.area+' '+p.status).toLowerCase().includes(q.toLowerCase()))&&(filter==='All'||p.status===filter.toLowerCase()));
+ if(new URLSearchParams(window.location.search).get('demo')==='1')return <DemoApp/>;
  if(loading)return <div className="layout"><section className="content">Loading secure admin console…</section></div>;
  if(!db)return <div className="auth-shell"><Brand/><section className="auth-card"><h1>Admin access</h1><p>Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the admin Vercel project.</p></section></div>;
  if(!session)return <div className="auth-shell"><Brand/><section className="auth-card"><small className="eyebrow">PLATFORM MANAGEMENT</small><h1>Secure admin sign in</h1><p>Only authorized administrators can review and approve employee profiles.</p>{notice&&<div className="inline-notice">{notice}</div>}<label>Administrator email<input value={email} onChange={e=>E(e.target.value)} placeholder="you@example.com" inputMode="email" autoComplete="email" disabled={sent}/></label><button className="primary" disabled={busy||sent} onClick={send}>{busy?'Please wait…':sent?'Sign-in link sent':'Email me a secure sign-in link →'}</button>{sent&&<button className="text-button" onClick={()=>{S(false);E('')}}>Use another email</button>}<div className="security-note"><ShieldCheck/><span>SMS sign-in is not configured yet. Email sign-in avoids requiring an SMS provider. Admin privileges are still checked by the protected database.</span></div></section></div>;
