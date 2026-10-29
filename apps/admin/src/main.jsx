@@ -1,44 +1,91 @@
-import React,{useEffect,useState} from 'react';
-import{createRoot}from'react-dom/client';
-import{createClient}from'@supabase/supabase-js';
-import{Users,UserCheck,ShieldAlert,Search,RefreshCw,LogOut,ShieldCheck,CheckCircle2,XCircle,Clock}from'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import { Users, UserCheck, ShieldAlert, Clock, RefreshCw, Database, Activity, ShieldCheck } from 'lucide-react';
 import './style.css';
-const url=import.meta.env.VITE_SUPABASE_URL,key=import.meta.env.VITE_SUPABASE_ANON_KEY,db=url&&key?createClient(url,key):null;
-function Brand(){return <div className="brand"><b className="logo">M</b><span><strong>MeetConnect</strong><small>ADMIN CONSOLE</small></span></div>}
-function App(){
- const[session,S]=useState(null),[loading,L]=useState(true),[admin,A]=useState(false),[username,E]=useState('CEO'),[password,P]=useState(''),[loginMode,LM]=useState('passwordless'),[busy,B]=useState(false),[error,Err]=useState(''),[notice,N]=useState(''),[tab,T]=useState('Overview'),[q,Q]=useState(''),[employees,Es]=useState([]),[profiles,Ps]=useState([]),[reports,Rs]=useState([]),[mfaMode,MM]=useState(''),[factorId,FI]=useState(''),[qrCode,QR]=useState(''),[secret,SC]=useState(''),[otp,OTP]=useState(''),[setupSecret,SS]=useState(''),[setupCode,SCd]=useState(''),[setupVisible,SV]=useState(false),[emailOtp,EO]=useState('');
- useEffect(()=>{if(!db){L(false);return}let alive=true;db.auth.getSession().then(async({data})=>{if(!alive)return;S(data.session);if(data.session){if(sessionStorage.getItem('mc_admin_totp_setup_flow')==='1')await finishSetup(data.session);else await verify(data.session)}L(false)});const{data:{subscription}}=db.auth.onAuthStateChange((_e,s)=>{S(s);if(s){setTimeout(()=>{if(sessionStorage.getItem('mc_admin_totp_setup_flow')==='1')finishSetup(s);else verify(s)},0)}else{A(false);Es([]);Ps([]);Rs([])}});return()=>{alive=false;subscription.unsubscribe()}},[]);
- async function verify(s){if(!db||!s||sessionStorage.getItem('mc_admin_totp_setup_flow')==='1')return;const{data,error}=await db.from('meetconnect_admin_members').select('user_id').eq('user_id',s.user.id).maybeSingle();if(error){A(false);Err('Could not verify administrator access: '+error.message);return}if(!data){A(false);MM('');Err('This account is not on the MeetConnect administrator allowlist. Ask the project owner to grant access.');return}if(sessionStorage.getItem('mc_admin_totp_session')==='1'&&s.user.email?.toLowerCase()==='abemelekbekele375@gmail.com'){MM('');A(true);Err('');await load();return}const factors=await db.auth.mfa.listFactors();if(factors.error){A(false);Err('Could not check authenticator security: '+factors.error.message);return}const totp=factors.data?.totp||[];if(!totp.length){const enrolled=await db.auth.mfa.enroll({factorType:'totp',friendlyName:'MeetConnect Admin Authenticator',issuer:'MeetConnect Admin'});if(enrolled.error){A(false);Err('Could not start authenticator setup: '+enrolled.error.message);return}FI(enrolled.data.id);QR(enrolled.data.totp.qr_code);SC(enrolled.data.totp.secret);OTP('');MM('enroll');A(false);Err('');return}const assurance=await db.auth.mfa.getAuthenticatorAssuranceLevel();if(assurance.error){A(false);Err('Could not verify authenticator status: '+assurance.error.message);return}if(assurance.data.currentLevel!=='aal2'){FI(totp[0].id);OTP('');MM('verify');A(false);Err('');return}MM('');A(true);Err('');await load()}
- async function load(){if(!db)return;B(true);Err('');const[e,p,r]=await Promise.all([db.from('employee_profiles').select('id,bio,service_area,short_price_etb,long_price_etb,status,created_at').order('created_at',{ascending:false}),db.from('profiles').select('id,display_name,phone,gender,role,is_adult,area,created_at').order('created_at',{ascending:false}),db.from('reports').select('id,reporter_id,reported_user_id,category,details,status,created_at').order('created_at',{ascending:false})]);if(e.error||p.error||r.error)Err('Could not load data: '+(e.error||p.error||r.error).message);else{Es(e.data||[]);Ps(p.data||[]);Rs(r.data||[])}B(false)}
- async function finishSetup(s){if(!db||!s||sessionStorage.getItem('mc_admin_totp_setup_flow')!=='1'||sessionStorage.getItem('mc_admin_totp_setup_started')==='1')return;sessionStorage.setItem('mc_admin_totp_setup_started','1');B(true);Err('');try{if(s.user?.email?.toLowerCase()!=='abemelekbekele375@gmail.com')throw new Error('The sign-in link must be opened by the authorized CEO account.');const{data,error}=await db.functions.invoke('meetconnect-admin-auth',{body:{action:'setup'},headers:{Authorization:'Bearer '+s.access_token}});if(error)throw error;if(data?.error)throw new Error(data.error);SS(data.secret||'');SV(true);LM('passwordless');N('Authenticator setup key generated. Add it to Google Authenticator, then enter the current six-digit code.');}catch(e){sessionStorage.removeItem('mc_admin_totp_setup_started');Err(e.message||'Could not generate the authenticator setup key.')}finally{B(false)}}
- async function startSetup(){if(!db)return;B(true);Err('');N('');try{sessionStorage.setItem('mc_admin_totp_setup_flow','1');sessionStorage.removeItem('mc_admin_totp_setup_started');const{error}=await db.auth.signInWithOtp({email:'abemelekbekele375@gmail.com',options:{shouldCreateUser:false,emailRedirectTo:window.location.origin+'/?admin_setup=1'}});if(error)throw error;LM('setupEmail');N('Supabase sent a secure sign-in link to the CEO email. Open that link on this same device and browser; the Admin app will then generate your Google Authenticator setup key.');}catch(e){sessionStorage.removeItem('mc_admin_totp_setup_flow');Err(e.message||'Could not send the setup sign-in link.')}finally{B(false)}}
- async function login(ev){ev.preventDefault();B(true);Err('');if(!db){B(false);return}if(username.trim().toUpperCase()!=='CEO'){Err('Use the CEO username to sign in.');B(false);return}try{if(loginMode==='setupEmail'){const{data:verified,error:verifyError}=await db.auth.verifyOtp({email:'abemelekbekele375@gmail.com',token:emailOtp.trim(),type:'email'});if(verifyError)throw verifyError;if(!verified.session)throw new Error('Email verification did not create a secure session.');sessionStorage.setItem('mc_admin_totp_setup_flow','1');S(verified.session);const{data,error}=await db.functions.invoke('meetconnect-admin-auth',{body:{action:'setup'},headers:{Authorization:'Bearer '+verified.session.access_token}});if(error)throw error;if(data?.error)throw new Error(data.error);SS(data.secret||'');SV(true);LM('passwordless');N('Add this setup key to Google Authenticator, then enter the current six-digit code below.');}else if(loginMode==='bootstrap'){const{error}=await db.auth.signInWithPassword({email:'abemelekbekele375@gmail.com',password});if(error)Err('Initial setup sign-in failed. Check your current admin password.');}else{const{data,error}=await db.functions.invoke('meetconnect-admin-auth',{body:{action:'login',username:'CEO',code:otp.trim()}});if(error)throw error;if(data?.error)throw new Error(data.error);if(!data?.session?.access_token||!data?.session?.refresh_token)throw new Error('The secure login service did not return a session.');sessionStorage.setItem('mc_admin_totp_session','1');const{error:setError}=await db.auth.setSession({access_token:data.session.access_token,refresh_token:data.session.refresh_token});if(setError)throw setError;S(data.session);await verify(data.session);}}catch(e){Err(e.message||'Secure sign-in failed. Please try again.')}finally{B(false)}}
- async function verifyAuthenticator(ev){ev.preventDefault();if(!db||!factorId)return;B(true);Err('');try{let result;if(mfaMode==='enroll'){result=await db.auth.mfa.challengeAndVerify({factorId,code:otp.trim()})}else{const challenge=await db.auth.mfa.challenge({factorId});if(challenge.error)throw challenge.error;result=await db.auth.mfa.verify({factorId,challengeId:challenge.data.id,code:otp.trim()})}if(result.error)throw result.error;const current=await db.auth.getSession();if(current.data.session)await verify(current.data.session)}catch(e){Err('Authenticator code was not accepted: '+(e.message||'Please try again.'))}finally{B(false)}}
- async function logout(){sessionStorage.removeItem('mc_admin_totp_session');sessionStorage.removeItem('mc_admin_totp_setup_flow');sessionStorage.removeItem('mc_admin_totp_setup_started');await db.auth.signOut();S(null);A(false)}
- async function beginPasswordlessSetup(){if(!db||!session)return;B(true);Err('');try{const{data,error}=await db.functions.invoke('meetconnect-admin-auth',{body:{action:'setup'},headers:{Authorization:'Bearer '+session.access_token}});if(error)throw error;if(data?.error)throw new Error(data.error);SS(data.secret||'');SV(true);N('Add the secret key to Google Authenticator, then enter the current six-digit code below.');}catch(e){Err(e.message||'Could not start passwordless setup.')}finally{B(false)}}
- async function confirmPasswordlessSetup(ev){ev.preventDefault();if(!db||!session)return;B(true);Err('');try{const{data,error}=await db.functions.invoke('meetconnect-admin-auth',{body:{action:'confirmSetup',code:setupCode.trim()},headers:{Authorization:'Bearer '+session.access_token}});if(error)throw error;if(data?.error)throw new Error(data.error);SV(false);SS('');SCd('');sessionStorage.removeItem('mc_admin_totp_session');sessionStorage.removeItem('mc_admin_totp_setup_flow');sessionStorage.removeItem('mc_admin_totp_setup_started');await db.auth.signOut();S(null);A(false);MM('');LM('passwordless');N('Passwordless CEO login is enabled. Sign in using CEO and a fresh Google Authenticator code.');}catch(e){Err(e.message||'Could not verify authenticator setup.')}finally{B(false)}}
- async function status(id,status){if(!admin)return; if(!confirm('Confirm employee status: '+status+'?'))return;B(true);const{error}=await db.from('employee_profiles').update({status,updated_at:new Date().toISOString()}).eq('id',id);if(error)Err('Update failed: '+error.message);else N('Employee status updated to '+status+'.');await load();B(false)}
- const profile=id=>profiles.find(p=>p.id===id),pending=employees.filter(e=>e.status==='pending').length,approved=employees.filter(e=>e.status==='approved').length,open=reports.filter(r=>['open','reviewing'].includes(r.status)).length;
- const matches=(x)=>[x.display_name,x.phone,x.role,x.area,x.status,x.service_area,x.bio].join(' ').toLowerCase().includes(q.toLowerCase());
- const tableHeaders=tab==='Reports & safety'?['CATEGORY','DETAILS','REPORTED USER','STATUS','DATE']:tab==='Users'?['NAME','PHONE','ROLE','18+ GATE','AREA']:['EMPLOYEE','AREA','PRICES (ETB)','STATUS','ACTION'];
- let tableRows=[];
- if(tab==='Reports & safety') tableRows=reports.filter(matches).map(r=><tr key={r.id}><td>{r.category.replaceAll('_',' ')}</td><td>{r.details||'—'}</td><td>{r.reported_user_id||'—'}</td><td><Badge value={r.status}/></td><td>{new Date(r.created_at).toLocaleDateString()}</td></tr>);
- else if(tab==='Users') tableRows=profiles.filter(matches).map(p=><tr key={p.id}><td><b>{p.display_name||'Unnamed user'}</b></td><td>{p.phone||'—'}</td><td>{p.role}</td><td><Badge value={p.is_adult?'confirmed':'not confirmed'}/></td><td>{p.area||'—'}</td></tr>);
- else tableRows=employees.filter(e=>tab==='Overview'?e.status==='pending'||employees.length<7:true).filter(e=>matches({...e,...profile(e.id)})).map(e=>{const p=profile(e.id);return <tr key={e.id}><td><b>{p?.display_name||'Employee'}</b><small>{p?.phone||e.id.slice(0,8)+'…'}</small></td><td>{e.service_area||p?.area||'—'}</td><td>Short: {e.short_price_etb??'—'}<br/>Long: {e.long_price_etb??'—'}</td><td><Badge value={e.status}/></td><td><div className="actions">{e.status!=='approved'&&<button onClick={()=>status(e.id,'approved')} disabled={busy} className="approve"><CheckCircle2 size={14}/>Approve</button>}{e.status!=='rejected'&&<button onClick={()=>status(e.id,'rejected')} disabled={busy} className="reject"><XCircle size={14}/>Reject</button>}{e.status==='approved'&&<button onClick={()=>status(e.id,'suspended')} disabled={busy}>Suspend</button>}{e.status==='suspended'&&<button onClick={()=>status(e.id,'approved')} disabled={busy}>Restore</button>}</div></td></tr>});
- if(loading)return <div className="auth-shell">Loading secure admin console…</div>;
- if(!db)return <div className="auth-shell"><Brand/><section className="auth-card"><h1>Connect Supabase</h1><p>Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to the admin Vercel project environment variables.</p></section></div>;
- if(!session)return <div className="auth-shell"><Brand/><form className="auth-card" onSubmit={login}><small className="eyebrow">PLATFORM MANAGEMENT</small><h1>{loginMode==='passwordless'?'CEO admin sign in':loginMode==='setupEmail'?'First-time authenticator setup':'First-time setup'}</h1><p>{loginMode==='passwordless'?'Enter the CEO username and current Google Authenticator code. No password is needed.':loginMode==='setupEmail'?'Verify the authorized CEO email once to generate your Google Authenticator setup key. No password or registration is required.':'Use your existing admin sign-in once to enable passwordless Google Authenticator login.'}</p>{error&&<div className="alert">{error}</div>}{notice&&<div className="notice">{notice}</div>}<label>Username<input type="text" required autoComplete="username" value={username} onChange={e=>E(e.target.value)} placeholder="CEO"/></label>{loginMode==='passwordless'?<label>Google Authenticator code<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={otp} onChange={e=>OTP(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="000000"/></label>:loginMode==='setupEmail'?<label>CEO email verification code<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={emailOtp} onChange={e=>EO(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="000000"/></label>:<label>Current admin password<input type="password" required autoComplete="current-password" value={password} onChange={e=>P(e.target.value)}/></label>}<button className="primary" disabled={busy||(loginMode==='passwordless'&&otp.length!==6)||(loginMode==='setupEmail'&&emailOtp.length!==6)}>{busy?'Please wait…':loginMode==='passwordless'?'Sign in securely':loginMode==='setupEmail'?'Verify email and reveal setup key':'Continue to setup'}</button><p className="hint">Registration is disabled. Only the authorized CEO can sign in with Google Authenticator.</p>{loginMode==='passwordless'&&<button type="button" className="secondary" onClick={startSetup} disabled={busy}>First-time authenticator setup</button>}{loginMode==='setupEmail'&&<p className="hint">Enter the verification code sent to the authorized CEO email to reveal the authenticator setup key.</p>}</form></div>;
- if(mfaMode)return <div className="auth-shell"><Brand/><form className="auth-card" onSubmit={verifyAuthenticator}><small className="eyebrow">ADMIN SECURITY</small><h1>{mfaMode==='enroll'?'Set up Google Authenticator':'Verify your sign-in'}</h1><p>{mfaMode==='enroll'?'Open Google Authenticator (or another TOTP authenticator), add an account by scanning this QR code, then enter the six-digit code.':'Open Google Authenticator and enter the current six-digit MeetConnect Admin code.'}</p>{error&&<div className="alert">{error}</div>}{mfaMode==='enroll'&&qrCode&&<div className="qr-wrap"><img className="auth-qr" src={qrCode} alt="Authenticator setup QR code"/><p className="hint">If you cannot scan the QR code, enter this setup key manually:</p><code className="secret-key">{secret}</code></div>}<label>6-digit authenticator code<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={otp} onChange={e=>OTP(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="000000"/></label><button className="primary" disabled={busy||otp.length!==6}>{busy?'Verifying…':mfaMode==='enroll'?'Enable authenticator':'Verify and continue'}</button><p className="hint">Keep your authenticator app available for future administrator sign-ins.</p></form></div>;
- if(setupVisible)return <div className="auth-shell"><Brand/><form className="auth-card" onSubmit={confirmPasswordlessSetup}><small className="eyebrow">ADMIN SECURITY</small><h1>Enable passwordless login</h1><p>In Google Authenticator, add an account manually using the key below. Keep this key private.</p>{error&&<div className="alert">{error}</div>}<label>Authenticator setup key<code className="secret-key">{setupSecret}</code></label><label>Six-digit code<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={setupCode} onChange={e=>SCd(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="000000"/></label><button className="primary" disabled={busy||setupCode.length!==6}>{busy?'Verifying…':'Verify and enable passwordless login'}</button><button type="button" className="secondary" onClick={()=>{SV(false);SS('');SCd('')}}>Cancel setup</button></form></div>;
- if(!admin)return <div className="auth-shell"><Brand/><section className="auth-card"><ShieldAlert/><h1>Admin access not enabled</h1><p>{error||'This account has no administrator permission.'}</p><button className="primary" onClick={logout}>Sign out</button></section></div>;
- const nav=['Overview','Employees','Users','Reports & safety'];
- return <div className="layout"><aside><Brand/><small className="section">WORKSPACE</small>{nav.map(n=><button key={n} className={'nav '+(tab===n?'selected':'')} onClick={()=>{T(n);Q('')}}>{n==='Overview'?<ShieldCheck size={17}/>:n==='Employees'?<UserCheck size={17}/>:n==='Users'?<Users size={17}/>:<ShieldAlert size={17}/>}{n}{n==='Employees'&&pending>0&&<i>{pending}</i>}</button>)}<div className="asidebottom"><ShieldCheck/><span><b>Secure workspace</b><small>Admin access verified</small></span></div><button className="nav signout" onClick={logout}><LogOut size={17}/>Sign out</button></aside><main className="content"><header><div><small className="eyebrow">PLATFORM MANAGEMENT</small><h1>{tab==='Overview'?'MeetConnect dashboard':tab}</h1><p>Live records from your shared Supabase database.</p></div><button className="refresh" onClick={load} disabled={busy}><RefreshCw size={17}/></button></header>{error&&<div className="alert">{error}</div>}{notice&&<div className="notice" onClick={()=>N('')}>{notice}　×</div>}
- {tab==='Overview'&&<div className="metrics"><Metric icon={<Users/>} label="Registered profiles" value={profiles.length}/><Metric icon={<Clock/>} label="Pending employees" value={pending}/><Metric icon={<UserCheck/>} label="Approved employees" value={approved}/><Metric icon={<ShieldAlert/>} label="Open reports" value={open}/></div>}
- <section className="panel"><div className="panelhead"><div><h2>{tab==='Overview'?'Employee applications':tab}</h2><p>{tab==='Employees'?'Approve only after reviewing employee details and media.':tab==='Reports & safety'?'Report review is currently read-only until secure moderation permissions are configured.':'Search and review live database records.'}</p></div><div className="search"><Search size={16}/><input value={q} onChange={e=>Q(e.target.value)} placeholder="Search name, phone, area…"/></div></div>
- <Table headers={tableHeaders} rows={tableRows}/></section>
- {!sessionStorage.getItem('mc_admin_totp_session')&&<section className="commission"><b>Passwordless CEO login</b><p>Set up a dedicated Google Authenticator code so future admin sign-ins do not require a password.</p><button className="primary" onClick={beginPasswordlessSetup} disabled={busy}>Set up passwordless login</button></section>}<section className="commission"><b>Commission policy</b><p>Employee-set prices · MeetConnect commission is fixed at 10% of a successfully paid session. Employees receive 90% before payment-provider fees and applicable taxes.</p></section><footer>MeetConnect Admin · Authorized access only · Real database records</footer></main></div>
+
+const url = import.meta.env.VITE_SUPABASE_URL;
+const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+function Brand() {
+  return <div className="brand"><b className="logo">M</b><span><strong>MeetConnect</strong><small>ADMIN CONSOLE</small></span></div>;
 }
-function Metric({icon,label,value}){return <article className="metric">{icon}<small>{label}</small><strong>{value}</strong></article>}
-function Badge({value}){return <span className={'badge '+String(value).toLowerCase().replaceAll(' ','-')}>{value}</span>}
-function Table({headers,rows}){return <div className="tablewrap"><table><thead><tr>{headers.map(h=><th key={h}>{h}</th>)}</tr></thead><tbody>{rows.length?rows:<tr><td colSpan={headers.length} className="empty">No matching records found.</td></tr>}</tbody></table></div>}
+
+function Metric({ icon, label, value }) {
+  return <article className="metric">{icon}<small>{label}</small><strong>{value ?? '—'}</strong></article>;
+}
+
+function App() {
+  const [stats, setStats] = useState(null);
+  const [busy, setBusy] = useState(true);
+  const [error, setError] = useState('');
+  const [updatedAt, setUpdatedAt] = useState('');
+
+  const load = useCallback(async () => {
+    if (!url || !key) {
+      setError('Admin environment is missing the Supabase URL or public anon key.');
+      setBusy(false);
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const response = await fetch(url.replace(/\/$/, '') + '/functions/v1/meetconnect-admin-public-stats', {
+        method: 'GET',
+        headers: { apikey: key, Authorization: 'Bearer ' + key }
+        });
+      const data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || 'Could not read the live database.');
+      if (data.source !== 'live_supabase_database') throw new Error('The data source could not be verified.');
+      setStats(data);
+      setUpdatedAt(data.generatedAt || new Date().toISOString());
+    } catch (e) {
+      setError((e && e.message) || 'Could not load live dashboard statistics.');
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  return <div className="layout">
+    <aside>
+      <Brand />
+      <small className="section">WORKSPACE</small>
+      <div className="nav selected"><Activity size={17}/>Live Overview</div>
+      <div className="asidebottom"><ShieldCheck/><span><b>Read-only view</b><small>Private records protected</small></span></div>
+    </aside>
+    <main className="content">
+      <header>
+        <div><small className="eyebrow">PLATFORM MANAGEMENT</small><h1>MeetConnect dashboard</h1><p>Live summary from your real Supabase database — no sample data.</p></div>
+        <button className="refresh" onClick={load} disabled={busy} aria-label="Refresh live data"><RefreshCw size={17}/></button>
+      </header>
+      {error && <div className="alert">{error}</div>}
+      <div className="metrics">
+        <Metric icon={<Users/>} label="Registered profiles" value={stats?.profiles}/>
+        <Metric icon={<Clock/>} label="Pending employees" value={stats?.pendingEmployees}/>
+        <Metric icon={<UserCheck/>} label="Approved employees" value={stats?.approvedEmployees}/>
+        <Metric icon={<ShieldAlert/>} label="Open safety reports" value={stats?.openReports}/>
+      </div>
+      <section className="panel">
+        <div className="panelhead">
+          <div><h2><Database size={17} style={{verticalAlign:'middle',marginRight:8}}/>Live database status</h2><p>{busy ? 'Connecting to Supabase and counting current records…' : stats ? 'Counts were read from the connected production database.' : 'Waiting for a successful database response.'}</p></div>
+          <span className={'badge ' + (stats ? 'approved' : 'pending')}>{stats ? 'Connected' : busy ? 'Loading' : 'Not connected'}</span>
+        </div>
+        <div style={{padding:'22px 19px'}}>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12}}>
+            <div><small style={{color:'#8792a7'}}>Employee records</small><div style={{fontSize:24,fontWeight:800,marginTop:7}}>{stats?.employees ?? '—'}</div></div>
+            <div><small style={{color:'#8792a7'}}>Safety reports (all statuses)</small><div style={{fontSize:24,fontWeight:800,marginTop:7}}>{stats?.reports ?? '—'}</div></div>
+            <div><small style={{color:'#8792a7'}}>Last refreshed</small><div style={{fontSize:13,fontWeight:700,marginTop:12}}>{updatedAt ? new Date(updatedAt).toLocaleString() : '—'}</div></div>
+          </div>
+        </div>
+      </section>
+      <section className="commission">
+        <b>Investor-safe dashboard</b>
+        <p>This page reads live database totals only. It does not display phone numbers, personal profiles, report details, or employee approval controls without administrator sign-in. All figures come from the real database, not demo data.</p>
+      </section>
+      <footer>MeetConnect Admin · Live database summary · Read-only</footer>
+    </main>
+  </div>;
+}
+
 createRoot(document.getElementById('root')).render(<App/>);
