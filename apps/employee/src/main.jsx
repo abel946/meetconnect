@@ -21,8 +21,8 @@ function App() {
   const [session,setSession] = React.useState(null);
   const [loading,setLoading] = React.useState(true);
   const [phone,setPhone] = React.useState('');
-  const [otp,setOtp] = React.useState('');
-  const [otpSent,setOtpSent] = React.useState(false);
+  const [password,setPassword] = React.useState('');
+  const [authMode,setAuthMode] = React.useState('register');
   const [authBusy,setAuthBusy] = React.useState(false);
   const [form,setForm] = React.useState(emptyForm);
   const [status,setStatus] = React.useState(null);
@@ -76,27 +76,34 @@ function App() {
     return () => { mounted=false; subscription.unsubscribe(); };
   },[loadWorkspace]);
 
-  async function sendCode() {
+  async function authenticate() {
     if (!supabase) return say('Supabase is not configured. Please check Vercel environment variables.');
     const normalized = normalizePhone(phone);
-    if (!/^\+\d{8,15}$/.test(normalized)) return say('Enter a valid phone number, for example +2519XXXXXXXX.');
+    if (!/^\\+\\d{8,15}$/.test(normalized)) return say('Enter a valid phone number, for example +2519XXXXXXXX.');
+    if (password.length < 8) return say('Use a password with at least 8 characters.');
     setAuthBusy(true);
-    const {error} = await supabase.auth.signInWithOtp({phone:normalized});
+    let result;
+    if (authMode === 'register') {
+      result = await supabase.auth.signUp({ phone: normalized, password });
+    } else {
+      result = await supabase.auth.signInWithPassword({ phone: normalized, password });
+    }
     setAuthBusy(false);
-    if (error) return say('Could not send SMS code: ' + error.message);
-    setPhone(normalized); setOtpSent(true); say('Verification code sent to ' + normalized + '.');
-  }
-  async function verifyCode() {
-    if (!supabase || !otp.trim()) return say('Enter the SMS verification code.');
-    setAuthBusy(true);
-    const {data,error} = await supabase.auth.verifyOtp({phone:normalizePhone(phone),token:otp.trim(),type:'sms'});
-    setAuthBusy(false);
-    if (error) return say('Verification failed: ' + error.message);
-    if (data.session) { setSession(data.session); await loadWorkspace(data.session); say('Phone verified. Complete your employee profile below.'); }
+    if (result.error) return say((authMode === 'register' ? 'Registration failed: ' : 'Sign in failed: ') + result.error.message);
+    setPhone(normalized);
+    if (result.data.session) {
+      setSession(result.data.session);
+      await loadWorkspace(result.data.session);
+      say(authMode === 'register' ? 'Account created. Complete your employee profile below.' : 'Welcome back.');
+    } else if (authMode === 'register') {
+      say('Account created, but Supabase is still asking for phone confirmation. To remove SMS verification, disable phone confirmations in Supabase Auth settings and try again.');
+    } else {
+      say('Sign in completed without a session. Check your Supabase phone-auth settings.');
+    }
   }
   async function saveProfile(e) {
     e?.preventDefault();
-    if (!session?.user) return say('Please verify your phone number first.');
+    if (!session?.user) return say('Please register or sign in with your phone number and password first.');
     if (!form.birthDate || form.birthDate > adultMax()) return say('MeetConnect is only for adults aged 18 or older.');
     if (!form.name.trim() || !form.serviceArea.trim()) return say('Enter your name and service area.');
     if (Number(form.shortPrice)<=0 || Number(form.longPrice)<=0) return say('Both session prices must be greater than zero.');
@@ -121,12 +128,12 @@ function App() {
   }
   async function signOut() {
     if (supabase) await supabase.auth.signOut();
-    setSession(null); setOtpSent(false); setOtp(''); setStatus(null); setRequests([]); setForm(emptyForm); setNotice('You have signed out.');
+    setSession(null); setPassword(''); setStatus(null); setRequests([]); setForm(emptyForm); setNotice('You have signed out.');
   }
   const money = value => Number(value||0).toLocaleString('en-US');
   if (loading) return <main><div className="panel"><h3>Loading MeetConnect…</h3><p>Preparing your secure employee workspace.</p></div></main>;
   if (!supabase) return <main><Header/><section className="hero"><small>EMPLOYEE SPACE</small><h1>Work with <em>confidence.</em></h1><p>Secure employee registration and profile management.</p></section><div className="notice"><ShieldCheck/><span><b>Backend setup needed</b><p>Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the employee Vercel project, then redeploy.</p></span></div></main>;
-  if (!session) return <main><Header/><section className="hero"><small>EMPLOYEE SPACE</small><h1>Your work.<br/><em>Your future.</em></h1><p>Sign in with your phone to register as an employee or manage your existing profile.</p><span className="status">● Secure SMS verification · 18+ only</span></section>{notice&&<div className="notice"><ShieldCheck/><span>{notice}</span></div>}<section className="panel auth-panel"><h3>{otpSent?'Verify your phone':'Employee sign in'}</h3><p>{otpSent?'Enter the SMS code sent to your phone.':'We will send you a one-time verification code.'}</p><label>Phone number (+251)<input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+2519XXXXXXXX" inputMode="tel" autoComplete="tel" disabled={otpSent}/></label>{otpSent&&<label>SMS verification code<input value={otp} onChange={e=>setOtp(e.target.value)} placeholder="Enter code" inputMode="numeric" autoComplete="one-time-code"/></label>}<button className="submit" disabled={authBusy} onClick={otpSent?verifyCode:sendCode}>{authBusy?'Please wait…':otpSent?'Verify & continue →':'Send verification code →'}</button>{otpSent&&<button className="secondary" onClick={()=>{setOtpSent(false);setOtp('');}}>Change phone number</button>}</section><footer>MeetConnect · Employee portal · Secure access</footer></main>;
+  if (!session) return <main><Header/><section className="hero"><small>EMPLOYEE SPACE</small><h1>Your work.<br/><em>Your future.</em></h1><p>Register or sign in using your phone number and password. No SMS code is required.</p><span className="status">● Phone + password · 18+ only</span></section>{notice&&<div className="notice"><ShieldCheck/><span>{notice}</span></div>}<section className="panel auth-panel"><div className="auth-switch"><button type="button" className={authMode==='register'?'on':''} onClick={()=>{setAuthMode('register');setNotice('');}}>Register</button><button type="button" className={authMode==='login'?'on':''} onClick={()=>{setAuthMode('login');setNotice('');}}>Sign in</button></div><h3>{authMode==='register'?'Create employee account':'Employee sign in'}</h3><p>{authMode==='register'?'Use your phone number and create a password. No SMS verification.':'Enter the phone number and password you registered with.'}</p><label>Phone number<input value={phone} onChange={e=>setPhone(e.target.value)} placeholder="+2519XXXXXXXX" inputMode="tel" autoComplete="tel"/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 8 characters" autoComplete={authMode==='register'?'new-password':'current-password'}/></label><button className="submit" disabled={authBusy} onClick={authenticate}>{authBusy?'Please wait…':authMode==='register'?'Create account →':'Sign in →'}</button><p className="auth-footnote">Keep your password private. Phone ownership is not verified in this version.</p></section><footer>MeetConnect · Employee portal · Phone registration without SMS</footer></main>;
   return <main><header><HeaderBrand/><button className="avatar" onClick={signOut} title="Sign out"><LogOut size={17}/></button></header><section className="hero"><small>EMPLOYEE SPACE</small><h1>Work with <em>confidence.</em></h1><p>Manage your service profile, requests and earnings in one place.</p><span className={'status '+(status==='approved'?'approved':'')}>● {status==='approved'?'Approved employee':status==='pending'?'Pending admin approval':'Complete your employee profile'}</span></section>{notice&&<button className="notice notice-message" onClick={()=>setNotice('')}><ShieldCheck/><span>{notice}</span> ×</button>}<nav>{['Overview','Requests','Profile'].map(x=><button key={x} className={tab===x?'on':''} onClick={()=>setTab(x)}>{x}</button>)}</nav>
     {tab==='Overview'&&<><div className="prices"><article><small>YOUR SHORT PRICE</small><h2>{money(form.shortPrice)} <i>ETB</i></h2><small>10% platform commission: {money(Number(form.shortPrice)*.1)} ETB</small><p>You receive {money(Number(form.shortPrice)*.9)} ETB before payment fees/taxes.</p></article><article><small>YOUR LONG PRICE</small><h2>{money(form.longPrice)} <i>ETB</i></h2><small>10% platform commission: {money(Number(form.longPrice)*.1)} ETB</small><p>You receive {money(Number(form.longPrice)*.9)} ETB before payment fees/taxes.</p></article></div><section className="panel"><h3>Your workspace</h3>{[[CalendarCheck,'Service requests','Review and manage customer requests','Requests'],[Camera,'Your employee profile','Edit your bio, service area and prices','Profile'],[Wallet,'Earnings overview','See your price and commission split','Profile'],[ShieldCheck,'Safety & support','Keep personal information private','Profile']].map(([I,a,b,d])=><button className="row" key={a} onClick={()=>setTab(d)}><I/><span><b>{a}</b><small>{b}</small></span><ChevronRight/></button>)}</section><div className="notice"><HeartHandshake/><span><b>Your safety comes first</b><p>Keep service requests inside MeetConnect. Never share private location details publicly.</p></span></div></>}
     {tab==='Requests'&&<section className="panel"><div className="panel-title"><h3>Service requests</h3><button className="icon-btn" onClick={()=>loadWorkspace(session)}><RefreshCw size={16}/></button></div>{requests.length===0?<p>No service requests yet. New customer requests will appear here.</p>:requests.map(r=><article className="request-card" key={r.id}><div className="request-top"><b>{r.customer?.display_name||'MeetConnect customer'}</b><span className={'request-status '+r.status}>{r.status}</span></div><p>{r.session_type==='short'?'Short session':'Long session'} · {money(r.agreed_price_etb)} ETB</p><small>{new Date(r.created_at).toLocaleString()}</small>{r.status==='pending'&&<div className="request-actions"><button className="accept" onClick={()=>updateRequest(r.id,'accepted')}><CheckCircle2 size={16}/> Accept</button><button className="decline" onClick={()=>updateRequest(r.id,'declined')}><XCircle size={16}/> Decline</button></div>}</article>)}</section>}
