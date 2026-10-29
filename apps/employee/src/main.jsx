@@ -77,32 +77,37 @@ function App() {
 
   async function authenticate() {
     if (!supabase) return say('Supabase is not configured. Please check Vercel environment variables.');
-    const loginEmail = usernameEmail(accountName);
+    const username = String(accountName || '').trim().toLowerCase();
+    if (!/^[a-z0-9][a-z0-9._-]{2,29}$/.test(username)) return say('Choose a unique account name using 3–30 letters, numbers, dots, underscores or hyphens.');
     if (authMode === 'register' && !ageConfirmed) return say('Please confirm that you are 18 years old or older before registering.');
-    if (!loginEmail) return say('Choose a unique account name using 3–30 letters, numbers, dots, underscores or hyphens. Start with a letter or number.');
     if (password.length < 8) return say('Use a password with at least 8 characters.');
     setAuthBusy(true);
-    let result;
     try {
-      if (authMode === 'register') {
-        result = await supabase.auth.signUp({ email: loginEmail, password, options: { data: { account_name: accountName.trim() } } });
-      } else {
-        result = await supabase.auth.signInWithPassword({ email: loginEmail, password });
+      const { data, error } = await supabase.functions.invoke('employee-username-auth', {
+        body: { action: authMode === 'register' ? 'register' : 'login', username, password, ageConfirmed }
+      });
+      if (error) {
+        let detail = error.message || 'Please try again.';
+        try { const body = await error.context?.json?.(); if (body?.error) detail = body.error; } catch {}
+        setAuthBusy(false);
+        return say((authMode === 'register' ? 'Registration failed: ' : 'Sign in failed: ') + detail);
       }
+      if (data?.error) { setAuthBusy(false); return say((authMode === 'register' ? 'Registration failed: ' : 'Sign in failed: ') + data.error); }
+      if (!data?.session?.access_token || !data?.session?.refresh_token) {
+        setAuthBusy(false);
+        return say('Authentication service returned no session. Please try again.');
+      }
+      const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+        access_token: data.session.access_token, refresh_token: data.session.refresh_token
+      });
+      setAuthBusy(false);
+      if (sessionError || !sessionData?.session) return say('Account processed, but this device could not start a session. Please sign in.');
+      setSession(sessionData.session);
+      await loadWorkspace(sessionData.session);
+      say(authMode === 'register' ? 'Account created. Complete your employee profile below.' : 'Welcome back.');
     } catch (error) {
       setAuthBusy(false);
-      return say('Could not contact the authentication service: ' + (error?.message || 'Please check your internet connection and try again.'));
-    }
-    setAuthBusy(false);
-    if (result.error) return say((authMode === 'register' ? 'Registration failed: ' : 'Sign in failed: ') + result.error.message);
-    if (result.data.session) {
-      setSession(result.data.session);
-      await loadWorkspace(result.data.session);
-      say(authMode === 'register' ? 'Account created. Complete your employee profile below.' : 'Welcome back.');
-    } else if (authMode === 'register') {
-      say('Account created, but Supabase is asking for email confirmation. In Supabase Auth settings, turn off email confirmations to allow name-and-password registration without an email address.');
-    } else {
-      say('Sign in completed without a session. Check your Supabase phone-auth settings.');
+      return say((authMode === 'register' ? 'Registration failed: ' : 'Sign in failed: ') + (error?.message || 'Please check your connection.'));
     }
   }
   async function saveProfile(e) {
