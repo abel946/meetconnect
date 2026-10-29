@@ -26,3 +26,6 @@
 .commission-note{font-size:11px;line-height:1.6;color:#c7b6ed;background:#21192e;border:1px solid #413152;border-radius:11px;padding:12px;margin:16px 0}
 .footer-link{border:0;background:none;color:#c4a8ff;text-decoration:underline;font:inherit;cursor:pointer}
 @media(max-width:440px){.prices{grid-template-columns:1fr}.hero{padding-top:26px}.prices h2{font-size:25px}}
+
+/* Explicit age confirmation on employee registration */
+.age-confirm{display:flex!important;align-items:flex-start;gap:10px;line-height:1.5;font-size:12px!important;background:#171522;border:1px solid #39334c;border-radius:11px;padding:12px;margin:14px 0!important}.panel .age-confirm input[type=checkbox]{display:block;flex:0 0 18px;width:18px;height:18px;margin:1px 0 0;accent-color:#c6a7ff}.age-confirm span{flex:1;color:#d6cde8}
