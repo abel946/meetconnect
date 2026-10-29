@@ -79,14 +79,19 @@ function App() {
   async function authenticate() {
     if (!supabase) return say('Supabase is not configured. Please check Vercel environment variables.');
     const normalized = normalizePhone(phone);
-    if (!/^\\+\\d{8,15}$/.test(normalized)) return say('Enter a valid phone number, for example +2519XXXXXXXX.');
+    if (!/^\+\d{8,15}$/.test(normalized)) return say('Enter a valid phone number, for example +2519XXXXXXXX.');
     if (password.length < 8) return say('Use a password with at least 8 characters.');
     setAuthBusy(true);
     let result;
-    if (authMode === 'register') {
-      result = await supabase.auth.signUp({ phone: normalized, password });
-    } else {
-      result = await supabase.auth.signInWithPassword({ phone: normalized, password });
+    try {
+      if (authMode === 'register') {
+        result = await supabase.auth.signUp({ phone: normalized, password });
+      } else {
+        result = await supabase.auth.signInWithPassword({ phone: normalized, password });
+      }
+    } catch (error) {
+      setAuthBusy(false);
+      return say('Could not contact the authentication service: ' + (error?.message || 'Please check your internet connection and try again.'));
     }
     setAuthBusy(false);
     if (result.error) return say((authMode === 'register' ? 'Registration failed: ' : 'Sign in failed: ') + result.error.message);
