@@ -1,6 +1,6 @@
 {
   "name": "meetconnect-employee",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.76.1",
     "vite": "latest",
     "react": "latest",
     "react-dom": "latest",
