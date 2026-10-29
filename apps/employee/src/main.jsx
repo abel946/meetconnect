@@ -1,13 +1,13 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
-import { Camera, CalendarCheck, ChevronRight, HeartHandshake, ShieldCheck, Wallet, UserRound, LogOut, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
+import { Camera, CalendarCheck, ChevronRight, HeartHandshake, ShieldCheck, Wallet, UserRound, LogOut, RefreshCw, CheckCircle2, XCircle, Video, Upload } from 'lucide-react';
 import './style.css';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
-const emptyForm = { name:'', gender:'female', birthDate:'', area:'Addis Ababa', serviceArea:'', bio:'', shortPrice:'500', longPrice:'2000' };
+const emptyForm = { name:'', gender:'female', birthDate:'', area:'Addis Ababa', serviceArea:'', bio:'', shortPrice:'500', longPrice:'2000', avatarUrl:'', videoUrl:'' };
 const adultMax = () => new Date(Date.now() - 18 * 365.25 * 24 * 60 * 60 * 1000).toISOString().slice(0,10);
 function usernameEmail(value) {
   const username = String(value || '').trim().toLowerCase();
@@ -28,6 +28,7 @@ function App() {
   const [requests,setRequests] = React.useState([]);
   const [notice,setNotice] = React.useState('');
   const [saving,setSaving] = React.useState(false);
+  const [uploading,setUploading] = React.useState(false);
   const [refreshing,setRefreshing] = React.useState(false);
   const say = (m) => { setNotice(m); window.scrollTo({top:0,behavior:'smooth'}); };
   const patch = (key,value) => setForm(old=>({...old,[key]:value}));
@@ -38,11 +39,11 @@ function App() {
     const uid = currentSession.user.id;
     const [{data:profile,error:profileError},{data:listing,error:listingError}] = await Promise.all([
       supabase.from('profiles').select('display_name,gender,birth_date,area,bio,role').eq('id',uid).maybeSingle(),
-      supabase.from('employee_profiles').select('bio,service_area,short_price_etb,long_price_etb,avatar_url,status').eq('id',uid).maybeSingle()
+      supabase.from('employee_profiles').select('bio,service_area,short_price_etb,long_price_etb,avatar_url,video_url,status').eq('id',uid).maybeSingle()
     ]);
     if (profileError) say('Could not load your account: ' + profileError.message);
     if (listingError) say('Could not load employee profile: ' + listingError.message);
-    if (profile) setForm(old=>({...old,name:profile.display_name||old.name,gender:profile.gender||old.gender,birthDate:profile.birth_date||old.birthDate,area:profile.area||old.area,bio:listing?.bio||profile.bio||old.bio,serviceArea:listing?.service_area||old.serviceArea,shortPrice:String(listing?.short_price_etb??old.shortPrice),longPrice:String(listing?.long_price_etb??old.longPrice)}));
+    if (profile) setForm(old=>({...old,name:profile.display_name||old.name,gender:profile.gender||old.gender,birthDate:profile.birth_date||old.birthDate,area:profile.area||old.area,bio:listing?.bio||profile.bio||old.bio,serviceArea:listing?.service_area||old.serviceArea,shortPrice:String(listing?.short_price_etb??old.shortPrice),longPrice:String(listing?.long_price_etb??old.longPrice),avatarUrl:listing?.avatar_url||old.avatarUrl,videoUrl:listing?.video_url||old.videoUrl}));
     setStatus(listing?.status || null);
     const {data:reqData,error:reqError} = await supabase.from('connection_requests').select('id,customer_id,employee_id,session_type,agreed_price_etb,status,created_at').eq('employee_id',uid).order('created_at',{ascending:false});
     if (!reqError) {
@@ -110,6 +111,39 @@ function App() {
       return say((authMode === 'register' ? 'Registration failed: ' : 'Sign in failed: ') + (error?.message || 'Please check your connection.'));
     }
   }
+  async function uploadMedia(file, kind) {
+    if (!session?.user) return say('Please sign in first.');
+    if (!file) return;
+    const isPhoto = kind === 'photo';
+    const allowed = isPhoto ? ['image/jpeg','image/png','image/webp'] : ['video/mp4','video/webm','video/quicktime'];
+    if (!allowed.includes(file.type)) return say(isPhoto ? 'Choose a JPG, PNG or WebP photo.' : 'Choose an MP4, WebM or MOV video.');
+    const maxBytes = isPhoto ? 5 * 1024 * 1024 : 20 * 1024 * 1024;
+    if (file.size > maxBytes) return say(isPhoto ? 'Photo must be 5 MB or smaller.' : 'Video must be 20 MB or smaller.');
+    if (!isPhoto) {
+      const localUrl = URL.createObjectURL(file);
+      const duration = await new Promise(resolve => {
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+        video.onloadedmetadata = () => { const d = video.duration; URL.revokeObjectURL(localUrl); resolve(d); };
+        video.onerror = () => { URL.revokeObjectURL(localUrl); resolve(NaN); };
+        video.src = localUrl;
+      });
+      if (!Number.isFinite(duration)) return say('Could not read this video. Please choose another file.');
+      if (duration > 10.05) return say('Profile videos must be no longer than 10 seconds.');
+    }
+    setUploading(true);
+    try {
+      const extension = (file.name.split('.').pop() || (isPhoto ? 'jpg' : 'mp4')).toLowerCase().replace(/[^a-z0-9]/g,'');
+      const path = `${session.user.id}/${kind}-${Date.now()}.${extension}`;
+      const { error } = await supabase.storage.from('employee-media').upload(path, file, { upsert: true, contentType: file.type });
+      if (error) throw error;
+      const { data } = supabase.storage.from('employee-media').getPublicUrl(path);
+      patch(isPhoto ? 'avatarUrl' : 'videoUrl', data.publicUrl);
+      say(isPhoto ? 'Profile photo uploaded. Save your profile to submit it for review.' : '10-second profile video uploaded. Save your profile to submit it for review.');
+    } catch (error) {
+      say('Media upload failed: ' + (error?.message || 'Please try again.'));
+    } finally { setUploading(false); }
+  }
   async function saveProfile(e) {
     e?.preventDefault();
     if (!session?.user) return say('Please register or sign in with your account name and password first.');
@@ -120,10 +154,12 @@ function App() {
     const {data,error} = await supabase.rpc('register_employee_profile',{
       p_display_name:form.name.trim(),p_gender:form.gender,p_birth_date:form.birthDate,
       p_bio:form.bio.trim(),p_area:form.area.trim(),p_service_area:form.serviceArea.trim(),
-      p_short_price_etb:Number(form.shortPrice),p_long_price_etb:Number(form.longPrice),p_avatar_url:null
+      p_short_price_etb:Number(form.shortPrice),p_long_price_etb:Number(form.longPrice),p_avatar_url:form.avatarUrl || null
     });
     setSaving(false);
     if (error) return say('Could not submit your profile: ' + error.message);
+    const {error:mediaError} = await supabase.rpc('save_employee_media',{p_avatar_url:form.avatarUrl || '',p_video_url:form.videoUrl || ''});
+    if (mediaError) { say('Profile saved, but media details could not be saved: ' + mediaError.message); await loadWorkspace(session); return; }
     setStatus(data?.status || 'pending');
     say('Your employee profile was submitted successfully. It is waiting for admin approval.');
     await loadWorkspace(session);
@@ -146,7 +182,9 @@ function App() {
   return <main><header><HeaderBrand/><button className="avatar" onClick={signOut} title="Sign out"><LogOut size={17}/></button></header><section className="hero"><small>EMPLOYEE SPACE</small><h1>Work with <em>confidence.</em></h1><p>Manage your service profile, requests and earnings in one place.</p><span className={'status '+(status==='approved'?'approved':'')}>● {status==='approved'?'Approved employee':status==='pending'?'Pending admin approval':'Complete your employee profile'}</span></section>{notice&&<button className="notice notice-message" onClick={()=>setNotice('')}><ShieldCheck/><span>{notice}</span> ×</button>}<nav>{['Overview','Requests','Profile'].map(x=><button key={x} className={tab===x?'on':''} onClick={()=>setTab(x)}>{x}</button>)}</nav>
     {tab==='Overview'&&<><div className="prices"><article><small>YOUR SHORT PRICE</small><h2>{money(form.shortPrice)} <i>ETB</i></h2><small>10% platform commission: {money(Number(form.shortPrice)*.1)} ETB</small><p>You receive {money(Number(form.shortPrice)*.9)} ETB before payment fees/taxes.</p></article><article><small>YOUR LONG PRICE</small><h2>{money(form.longPrice)} <i>ETB</i></h2><small>10% platform commission: {money(Number(form.longPrice)*.1)} ETB</small><p>You receive {money(Number(form.longPrice)*.9)} ETB before payment fees/taxes.</p></article></div><section className="panel"><h3>Your workspace</h3>{[[CalendarCheck,'Service requests','Review and manage customer requests','Requests'],[Camera,'Your employee profile','Edit your bio, service area and prices','Profile'],[Wallet,'Earnings overview','See your price and commission split','Profile'],[ShieldCheck,'Safety & support','Keep personal information private','Profile']].map(([I,a,b,d])=><button className="row" key={a} onClick={()=>setTab(d)}><I/><span><b>{a}</b><small>{b}</small></span><ChevronRight/></button>)}</section><div className="notice"><HeartHandshake/><span><b>Your safety comes first</b><p>Keep service requests inside MeetConnect. Never share private location details publicly.</p></span></div></>}
     {tab==='Requests'&&<section className="panel"><div className="panel-title"><h3>Service requests</h3><button className="icon-btn" onClick={()=>loadWorkspace(session)}><RefreshCw size={16}/></button></div>{requests.length===0?<p>No service requests yet. New customer requests will appear here.</p>:requests.map(r=><article className="request-card" key={r.id}><div className="request-top"><b>{r.customer?.display_name||'MeetConnect customer'}</b><span className={'request-status '+r.status}>{r.status}</span></div><p>{r.session_type==='short'?'Short session':'Long session'} · {money(r.agreed_price_etb)} ETB</p><small>{new Date(r.created_at).toLocaleString()}</small>{r.status==='pending'&&<div className="request-actions"><button className="accept" onClick={()=>updateRequest(r.id,'accepted')}><CheckCircle2 size={16}/> Accept</button><button className="decline" onClick={()=>updateRequest(r.id,'declined')}><XCircle size={16}/> Decline</button></div>}</article>)}</section>}
-    {tab==='Profile'&&<form className="panel" onSubmit={saveProfile}><h3>Your profile & pricing</h3><p>Complete your details accurately. Your profile stays hidden from discovery until an administrator approves it.</p><label>Full name<input required value={form.name} onChange={e=>patch('name',e.target.value)} placeholder="Your full name"/></label><label>Login account<input value={session.user.user_metadata?.account_name || accountName || "Account name"} readOnly/></label><label>Gender<select value={form.gender} onChange={e=>patch('gender',e.target.value)}><option value="female">Female</option><option value="male">Male</option></select></label><label>Date of birth<input type="date" required max={adultMax()} value={form.birthDate} onChange={e=>patch('birthDate',e.target.value)}/></label><label>City / general area<input required value={form.area} onChange={e=>patch('area',e.target.value)} placeholder="Addis Ababa"/></label><label>Service area<input required value={form.serviceArea} onChange={e=>patch('serviceArea',e.target.value)} placeholder="e.g. Bole, Addis Ababa"/></label><label>Introduction / bio<textarea maxLength={1000} rows="4" value={form.bio} onChange={e=>patch('bio',e.target.value)} placeholder="Introduce yourself and your services"/></label><label>Short session price (ETB)<input required type="number" min="1" value={form.shortPrice} onChange={e=>patch('shortPrice',e.target.value)}/></label><label>Long session price (ETB)<input required type="number" min="1" value={form.longPrice} onChange={e=>patch('longPrice',e.target.value)}/></label><div className="commission-note">MeetConnect commission is 10%. You receive 90% of the session price before payment-provider fees and applicable taxes.</div><button className="submit" disabled={saving}>{saving?'Saving securely…':status==='approved'?'Save profile changes':'Submit for admin review'}</button></form>}
+    {tab==='Profile'&&<form className="panel" onSubmit={saveProfile}><h3>Your profile & media</h3><p>Upload a clear profile photo and an optional profile video no longer than 10 seconds. Your profile stays hidden until admin approval.</p>
+    <div className="media-grid"><div className="media-card"><b><Camera size={17}/> Profile photo</b>{form.avatarUrl?<img className="media-preview photo-preview" src={form.avatarUrl} alt="Profile photo preview"/>:<div className="media-placeholder"><UserRound size={30}/><span>No photo uploaded</span></div>}<label className="file-pick"><Upload size={15}/> {uploading?'Uploading…':'Choose photo'}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={e=>uploadMedia(e.target.files?.[0],'photo')}/></label><small>JPG, PNG or WebP · Max 5 MB</small></div><div className="media-card"><b><Video size={17}/> Short profile video</b>{form.videoUrl?<video className="media-preview" src={form.videoUrl} controls playsInline/>:<div className="media-placeholder"><Video size={30}/><span>No video uploaded</span></div>}<label className="file-pick"><Upload size={15}/> {uploading?'Uploading…':'Choose video'}<input type="file" accept="video/mp4,video/webm,video/quicktime" disabled={uploading} onChange={e=>uploadMedia(e.target.files?.[0],'video')}/></label><small>Max 10 seconds · MP4/WebM/MOV · Max 20 MB</small></div></div>
+    <h3>Profile details & pricing</h3><p>Complete your details accurately. Your profile stays hidden from discovery until an administrator approves it.</p><label>Full name<input required value={form.name} onChange={e=>patch('name',e.target.value)} placeholder="Your full name"/></label><label>Login account<input value={session.user.user_metadata?.account_name || accountName || "Account name"} readOnly/></label><label>Gender<select value={form.gender} onChange={e=>patch('gender',e.target.value)}><option value="female">Female</option><option value="male">Male</option></select></label><label>Date of birth<input type="date" required max={adultMax()} value={form.birthDate} onChange={e=>patch('birthDate',e.target.value)}/></label><label>City / general area<input required value={form.area} onChange={e=>patch('area',e.target.value)} placeholder="Addis Ababa"/></label><label>Service area<input required value={form.serviceArea} onChange={e=>patch('serviceArea',e.target.value)} placeholder="e.g. Bole, Addis Ababa"/></label><label>Introduction / bio<textarea maxLength={1000} rows="4" value={form.bio} onChange={e=>patch('bio',e.target.value)} placeholder="Introduce yourself and your services"/></label><label>Short session price (ETB)<input required type="number" min="1" value={form.shortPrice} onChange={e=>patch('shortPrice',e.target.value)}/></label><label>Long session price (ETB)<input required type="number" min="1" value={form.longPrice} onChange={e=>patch('longPrice',e.target.value)}/></label><div className="commission-note">MeetConnect commission is 10%. You receive 90% of the session price before payment-provider fees and applicable taxes.</div><button className="submit" disabled={saving}>{saving?'Saving securely…':status==='approved'?'Save profile changes':'Submit for admin review'}</button></form>}
     <footer>MeetConnect · Employee portal · <button className="footer-link" onClick={signOut}>Sign out</button></footer></main>;
 }
 function HeaderBrand(){return <div className="brand"><b className="logo">M</b><span><strong>MeetConnect</strong><small>EMPLOYEE PORTAL</small></span></div>}
