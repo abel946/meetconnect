@@ -20,7 +20,10 @@ function App() {
   const [session, setSession] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [stats, setStats] = useState(null);
-  const [employees, setEmployees] = useState([]);\n  const [roomProviders, setRoomProviders] = useState([]);\n  const [roomListings, setRoomListings] = useState([]);\n  const [roomFilter, setRoomFilter] = useState('pending');
+  const [employees, setEmployees] = useState([]);
+  const [roomProviders, setRoomProviders] = useState([]);
+  const [roomListings, setRoomListings] = useState([]);
+  const [roomFilter, setRoomFilter] = useState('pending');
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -366,7 +369,8 @@ function App() {
           {roomListings.filter(x=>roomFilter==='all'||x.status===roomFilter).length===0&&<div className="empty">No room listings in this status.</div>}
         </div>
       </section>}
-\n      <section className="commission">
+
+      <section className="commission">
         <b>Administrator audit</b>
         <p>Approval decisions are written to the live employee_profiles table with reviewer, timestamp and reason. Employees cannot approve themselves. Only the CEO authenticator session can access review controls.</p>
       </section>
