@@ -34,3 +34,13 @@
 .auth-qr{display:block;width:220px;height:220px;max-width:100%;margin:0 auto 12px;padding:8px;border:1px solid #e3e8f1;border-radius:12px;background:#fff}
 .secret-key{display:block;overflow-wrap:anywhere;padding:10px;border-radius:8px;background:#f4f6fb;color:#293653;font-size:12px;letter-spacing:1px;margin-top:7px}
 @media(max-width:700px){.toolbar{align-items:stretch}.toolbar .search{max-width:none}.tabs{overflow-x:auto;flex-wrap:nowrap}.tabs button{white-space:nowrap}.employee-grid{grid-template-columns:1fr;padding:10px}}
+
+.room-admin-panel{margin-top:18px}
+.room-tabs{margin:14px 0}
+.room-admin-heading{font:700 14px Manrope;margin:20px 0 10px}
+.room-admin-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.room-admin-card{background:#171522;border:1px solid #39324c;border-radius:14px;padding:13px;min-width:0}
+.room-admin-card h3{font:700 14px Manrope;margin:9px 0}
+.room-admin-card p{font-size:11px;line-height:1.5;color:#b6afc7;margin:6px 0}
+.room-admin-card small{font-size:10px;color:#d7b9a5}
+.room-admin-photo{display:block;width:100%;height:145px;object-fit:cover;border-radius:10px;margin-bottom:10px}
