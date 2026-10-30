@@ -1,4 +1,4 @@
-name: Build MeetConnect Android Apps
+name: Build MeetConnect Room Service Android APK
 
 on:
   push:
@@ -13,26 +13,7 @@ permissions:
 jobs:
   build-android:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - app: customer
-            app_id: com.meetconnect.app
-            app_name: MeetConnect
-            app_url: https://meetconnect-woad.vercel.app
-          - app: employee
-            app_id: com.meetconnect.employee
-            app_name: MeetConnect Employee
-            app_url: https://meetconnect-employee.vercel.app
-          - app: admin
-            app_id: com.meetconnect.admin
-            app_name: MeetConnect Admin
-            app_url: https://meetconnect-admin.vercel.app
-          - app: room-service-employee
-            app_id: com.meetconnect.roomservice
-            app_name: MeetConnect Room Service
-            app_url: https://meetconnect-room-service-employee.vercel.app
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -49,9 +30,9 @@ jobs:
         run: npm install @capacitor/core@^7.4.3 @capacitor/android@^7.4.3 @capacitor/cli@^7.4.3
       - name: Create app wrapper configuration
         env:
-          APP_ID: ${{ matrix.app_id }}
-          APP_NAME: ${{ matrix.app_name }}
-          APP_URL: ${{ matrix.app_url }}
+          APP_ID: com.meetconnect.roomservice
+          APP_NAME: MeetConnect Room Service
+          APP_URL: https://meetconnect-room-service-employee.vercel.app
         run: |
           mkdir -p dist
           printf '<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body></body></html>' > dist/index.html
@@ -81,7 +62,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MeetConnect-${{ matrix.app }}-Android-APK
+          name: MeetConnect-room-service-employee-Android-APK
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
