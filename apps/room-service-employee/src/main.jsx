@@ -37,7 +37,7 @@ function App() {
     const uid = current.user.id;
     const [{data:p,error:pe},{data:r,error:re},{data:b,error:be}] = await Promise.all([
       supabase.from('room_service_profiles').select('*').eq('owner_id',uid).maybeSingle(),
-      supabase.from('room_listings').select('*').eq('owner_id',uid).order('created_at',{ascending:false}),
+      supabase.rpc('get_my_room_listings'),
       supabase.from('room_bookings').select('*').order('created_at',{ascending:false})
     ]);
     if (pe) say('Could not load business profile: '+pe.message);
