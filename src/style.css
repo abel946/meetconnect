@@ -93,3 +93,7 @@ body{background:radial-gradient(ellipse at 12% 12%,#242038 0,transparent 28%),#1
 @keyframes nav-glint{from{transform:scaleX(.3);opacity:.2}to{transform:scaleX(1);opacity:1}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important;transition-duration:.01ms!important}}
 @media(max-width:380px){.content{padding-left:15px;padding-right:15px}.hello h2{font-size:24px}.profile-card{padding:12px}.portrait{height:158px}.name-row h3{font-size:20px}.price-choice{padding:9px 8px}.price-choice b{font-size:12px}.card-actions{gap:8px}.round-action{width:40px;height:40px}.connect{font-size:11px}}
+
+/* Render real employee profile media from the approved database view */
+.portrait-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;z-index:1}
+.employee-video{display:block;width:100%;max-height:190px;object-fit:contain;background:#171522;border-radius:12px;margin:12px 0}
