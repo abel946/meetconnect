@@ -1,0 +1,12 @@
+{
+  "appId": "com.meetconnect.app",
+  "appName": "MeetConnect",
+  "webDir": "dist",
+  "server": {
+    "url": "https://meetconnect-woad.vercel.app",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}
