@@ -8,6 +8,16 @@ An Ethiopia-first social discovery MVP for consenting adults aged 18+.
 - **Employee portal (`apps/employee`):** separate mobile-friendly employee workspace, service request preview, employee profile fields, optional photo/video upload controls, and pricing display (SHORT 500 ETB / LONG 2,000 ETB).
 - **Admin console (`apps/admin`):** separate responsive interface for user/employee review, search/filter, and demo approval/rejection actions.
 
+## Room Service (2026-10-30)
+
+- **Customer app:** Messaging has been removed from the navigation and replaced by Room Service for approved hotel and private-room listings.
+- **Room Service partner app:** `apps/room-service-employee` is a separate mobile-friendly workspace for hotel/private-room owners to register, submit business details, upload room photos, manage listings, and review reservation requests.
+- **Existing Employee app:** unchanged.
+- **Existing Admin app:** now includes provider and room-listing approval/rejection/suspension controls.
+- **Shared backend:** room provider accounts, provider/listing approvals, public listing discovery, and validated reservation-request creation use the existing MeetConnect Supabase project. Room photos use the `room-service-media` bucket.
+
+See [Room Service architecture and current rollout status](docs/room-service.md). Chapa checkout and payment-webhook settlement for room bookings are not yet enabled; reservation requests remain unpaid until that work is completed.
+
 ## Deployment previews
 
 The employee portal and admin console were deployed as static preview snapshots. They are **not yet wired to live authentication or a database**, and the static preview copies are not automatically updated from GitHub until the GitHub-Vercel connection is configured.

@@ -97,3 +97,31 @@ body{background:radial-gradient(ellipse at 12% 12%,#242038 0,transparent 28%),#1
 /* Render real employee profile media from the approved database view */
 .portrait-photo{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:inherit;z-index:1}
 .employee-video{display:block;width:100%;max-height:190px;object-fit:contain;background:#171522;border-radius:12px;margin:12px 0}
+
+/* Room Service replaces the old messaging destination */
+.room-search-panel{margin:18px 0 14px;padding:15px;background:#1a1e2b;border:1px solid #ffffff12;border-radius:18px}
+.room-count{font-size:10px;color:#bfb3ff}
+.room-date-grid{display:grid;grid-template-columns:1fr 1fr .8fr;gap:8px;margin-top:14px}
+.room-date-grid label{display:block;color:#aaaabd;font-size:10px}
+.room-date-grid input,.room-date-grid select{width:100%;min-width:0;margin-top:6px;padding:10px 7px;border:1px solid #ffffff1c;border-radius:9px;background:#11131f;color:#fff;font:11px 'DM Sans',sans-serif}
+.room-customer-card{overflow:hidden;margin:14px 0;background:linear-gradient(145deg,#222235,#191d2b);border:1px solid #ffffff14;border-radius:19px;box-shadow:0 12px 30px #0002}
+.room-customer-photo{display:block;width:100%;height:190px;object-fit:cover;background:#171522}
+.room-customer-info{padding:14px}
+.room-provider-badge{display:inline-flex;align-items:center;gap:5px;padding:6px 8px;border-radius:20px;background:#17342f;color:#9fe4cb;font-size:9px}
+.room-customer-info h3{font:800 19px Manrope,sans-serif;margin:10px 0 5px}
+.room-customer-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:13px 0;color:#e8dfff;font-size:11px}
+.room-customer-meta>b{font:800 16px Manrope;color:#ffc0d2}
+.room-customer-meta small{font:500 10px 'DM Sans';color:#a7aabd}
+.room-amenities{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+.room-amenities span{padding:5px 7px;border-radius:7px;background:#ffffff0a;border:1px solid #ffffff12;color:#c8c1da;font-size:9px}
+.room-book-btn{height:42px;display:flex;align-items:center;justify-content:center;gap:8px}
+@media(max-width:380px){.room-date-grid{grid-template-columns:1fr 1fr}.room-date-grid label:last-child{grid-column:span 2}}
+
+.room-booking-history{margin-top:18px}
+.room-history-row{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #ffffff12}
+.room-history-row>div{display:grid;gap:5px}
+.room-history-row b{font-size:12px;color:#f4eefe}
+.room-history-row small{font-size:10px;color:#a7aabd}
+.room-history-row strong{font-size:12px;color:#ffc0d2;text-align:right}
+.room-history-status{font-size:9px;text-align:right;text-transform:capitalize;color:#cbbdff}
+.room-history-status.confirmed{color:#9be5c8}.room-history-status.rejected{color:#ffb0bf}
