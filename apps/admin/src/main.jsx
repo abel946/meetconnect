@@ -23,6 +23,7 @@ function App() {
   const [employees, setEmployees] = useState([]);
   const [roomProviders, setRoomProviders] = useState([]);
   const [roomListings, setRoomListings] = useState([]);
+  const [roomBookings, setRoomBookings] = useState([]);
   const [roomFilter, setRoomFilter] = useState('pending');
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
@@ -77,14 +78,17 @@ function App() {
 
   const loadRoomData = useCallback(async () => {
     if (!supabase || !session) return;
-    const [{data:providers,error:providerError},{data:listings,error:listingError}] = await Promise.all([
+    const [{data:providers,error:providerError},{data:listings,error:listingError},{data:bookings,error:bookingError}] = await Promise.all([
       supabase.from('room_service_profiles').select('*').order('created_at',{ascending:false}),
-      supabase.from('room_listings').select('*').order('created_at',{ascending:false})
+      supabase.from('room_listings').select('*').order('created_at',{ascending:false}),
+      supabase.from('room_bookings').select('*').order('created_at',{ascending:false})
     ]);
     if (providerError) setError('Could not load Room Service providers: '+providerError.message);
     if (listingError) setError('Could not load room listings: '+listingError.message);
+    if (bookingError) setError('Could not load room reservations: '+bookingError.message);
     setRoomProviders(providers||[]);
     setRoomListings(listings||[]);
+    setRoomBookings(bookings||[]);
   }, [session]);
 
   const verifyAdminSession = useCallback(async current => {
@@ -370,6 +374,18 @@ function App() {
         </div>
       </section>}
 
+        <h3 className="room-admin-heading">Reservation monitor ({roomBookings.length})</h3>
+        <div className="room-admin-grid">
+          {roomBookings.map(b=><article className="room-admin-card" key={b.id}>
+            <span className={'badge '+b.status}>{b.status}</span>
+            <h3>{roomListings.find(x=>x.id===b.listing_id)?.title || 'Room reservation'}</h3>
+            <p>{b.check_in} → {b.check_out} · {b.total_nights} night(s)</p>
+            <p>{b.guests} guest(s) · Customer ID: {b.customer_id}</p>
+            <p><b>{Number(b.total_amount_etb).toLocaleString()} ETB</b> · Payment: {b.payment_status}</p>
+            <small>Requested {b.created_at?new Date(b.created_at).toLocaleString():'—'}</small>
+          </article>)}
+          {roomBookings.length===0&&<div className="empty">No room reservations have been submitted yet.</div>}
+        </div>
       <section className="commission">
         <b>Administrator audit</b>
         <p>Approval decisions are written to the live employee_profiles table with reviewer, timestamp and reason. Employees cannot approve themselves. Only the CEO authenticator session can access review controls.</p>
