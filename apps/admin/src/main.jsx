@@ -80,7 +80,7 @@ function App() {
     if (!supabase || !session) return;
     const [{data:providers,error:providerError},{data:listings,error:listingError},{data:bookings,error:bookingError}] = await Promise.all([
       supabase.from('room_service_profiles').select('*').order('created_at',{ascending:false}),
-      supabase.from('room_listings').select('*').order('created_at',{ascending:false}),
+      supabase.rpc('get_admin_room_listings'),
       supabase.from('room_bookings').select('*').order('created_at',{ascending:false})
     ]);
     if (providerError) setError('Could not load Room Service providers: '+providerError.message);
