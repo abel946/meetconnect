@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
 import QRCode from 'qrcode';
-import { Users, UserCheck, ShieldAlert, Clock, RefreshCw, Database, Activity, ShieldCheck, LogOut, Search, Check, X, Video, Camera, LockKeyhole, KeyRound } from 'lucide-react';
+import { Users, UserCheck, ShieldAlert, Clock, RefreshCw, Database, Activity, ShieldCheck, LogOut, Search, Check, X, Video, Camera, LockKeyhole, KeyRound, Building2 } from 'lucide-react';
 import './style.css';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
@@ -20,7 +20,7 @@ function App() {
   const [session, setSession] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [stats, setStats] = useState(null);
-  const [employees, setEmployees] = useState([]);
+  const [employees, setEmployees] = useState([]);\n  const [roomProviders, setRoomProviders] = useState([]);\n  const [roomListings, setRoomListings] = useState([]);\n  const [roomFilter, setRoomFilter] = useState('pending');
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -70,6 +70,18 @@ function App() {
     } catch (e) {
       setError('Could not load employee applications: ' + (e?.message || 'Unknown database error.'));
     } finally { setBusy(false); }
+  }, [session]);
+
+  const loadRoomData = useCallback(async () => {
+    if (!supabase || !session) return;
+    const [{data:providers,error:providerError},{data:listings,error:listingError}] = await Promise.all([
+      supabase.from('room_service_profiles').select('*').order('created_at',{ascending:false}),
+      supabase.from('room_listings').select('*').order('created_at',{ascending:false})
+    ]);
+    if (providerError) setError('Could not load Room Service providers: '+providerError.message);
+    if (listingError) setError('Could not load room listings: '+listingError.message);
+    setRoomProviders(providers||[]);
+    setRoomListings(listings||[]);
   }, [session]);
 
   const verifyAdminSession = useCallback(async current => {
@@ -132,7 +144,7 @@ function App() {
     return () => { alive = false; subscription.unsubscribe(); };
   }, [verifyAdminSession, beginAuthenticatorSetup, loadStats]);
 
-  useEffect(() => { if (isAdmin && session) { loadEmployees(); loadStats(); } }, [isAdmin, session, loadEmployees, loadStats]);
+  useEffect(() => { if (isAdmin && session) { loadEmployees(); loadRoomData(); loadStats(); } }, [isAdmin, session, loadEmployees, loadRoomData, loadStats]);
 
   const counts = useMemo(() => ({
     pending: employees.filter(x => x.status === 'pending').length,
@@ -209,6 +221,40 @@ function App() {
     }
     setNotice('Employee status updated to ' + nextStatus + '. Customer discovery will reflect the new status.');
     await Promise.all([loadEmployees(), loadStats()]);
+  }
+
+  async function reviewRoomProvider(provider, nextStatus) {
+    if (!supabase || !session) return;
+    let note = '';
+    if (nextStatus === 'rejected' || nextStatus === 'suspended') {
+      note = window.prompt('Reason for '+nextStatus+' this room provider:') || '';
+      if (!note.trim()) { setNotice('A reason is required. No change was made.'); return; }
+    } else if (!window.confirm('Approve this room-service provider?')) return;
+    setWorkingId(provider.owner_id); setError(''); setNotice('');
+    const {data,error:reviewError} = await supabase.from('room_service_profiles').update({
+      status:nextStatus,reviewed_at:new Date().toISOString(),reviewed_by:session.user.id,review_note:note.trim()
+    }).eq('owner_id',provider.owner_id).select('owner_id,status').maybeSingle();
+    setWorkingId('');
+    if (reviewError || !data) { setError('Provider review was not saved: '+(reviewError?.message||'No row updated.')); return; }
+    setNotice('Room Service provider '+nextStatus+'.');
+    await loadRoomData();
+  }
+
+  async function reviewRoomListing(listing, nextStatus) {
+    if (!supabase || !session) return;
+    let note = '';
+    if (nextStatus === 'rejected' || nextStatus === 'suspended') {
+      note = window.prompt('Reason for '+nextStatus+' this room listing:') || '';
+      if (!note.trim()) { setNotice('A reason is required. No change was made.'); return; }
+    } else if (!window.confirm('Approve this room listing for customer discovery?')) return;
+    setWorkingId(listing.id); setError(''); setNotice('');
+    const {data,error:reviewError} = await supabase.from('room_listings').update({
+      status:nextStatus,reviewed_at:new Date().toISOString(),reviewed_by:session.user.id,review_note:note.trim()
+    }).eq('id',listing.id).select('id,status').maybeSingle();
+    setWorkingId('');
+    if (reviewError || !data) { setError('Room listing review was not saved: '+(reviewError?.message||'No row updated.')); return; }
+    setNotice('Room listing '+nextStatus+'.');
+    await loadRoomData();
   }
 
   async function signOut() {
@@ -294,7 +340,33 @@ function App() {
           </article>)}
         </div>}
       </section>}
-      <section className="commission">
+      {isAdmin && <section className="panel room-admin-panel">
+        <div className="panelhead"><div><h2><Building2 size={17} style={{verticalAlign:'middle',marginRight:8}}/>Room Service management</h2><p>Approve hotel and private-room providers and their room listings.</p></div><button className="refresh" onClick={loadRoomData}><RefreshCw size={16}/></button></div>
+        <div className="tabs room-tabs">{['pending','approved','rejected','suspended','all'].map(x=><button key={x} className={roomFilter===x?'active':''} onClick={()=>setRoomFilter(x)}>{x[0].toUpperCase()+x.slice(1)}</button>)}</div>
+        <h3 className="room-admin-heading">Provider applications ({roomProviders.filter(x=>roomFilter==='all'||x.status===roomFilter).length})</h3>
+        <div className="room-admin-grid">
+          {roomProviders.filter(x=>roomFilter==='all'||x.status===roomFilter).map(p=><article className="room-admin-card" key={p.owner_id}>
+            <span className={'badge '+p.status}>{p.status}</span><h3>{p.business_name}</h3><p>{p.provider_type==='hotel'?'Hotel / guest house':'Private room owner'} · {p.city}</p><p>{p.contact_name} · {p.contact_phone}</p><p>{p.address}</p>{p.description&&<p>{p.description}</p>}
+            {p.review_note&&<small>Previous note: {p.review_note}</small>}
+            {p.status==='pending'&&<div className="actions"><button className="approve" disabled={workingId===p.owner_id} onClick={()=>reviewRoomProvider(p,'approved')}><Check size={14}/> Approve</button><button className="reject" disabled={workingId===p.owner_id} onClick={()=>reviewRoomProvider(p,'rejected')}><X size={14}/> Reject</button></div>}
+            {p.status==='approved'&&<div className="actions"><button className="reject" disabled={workingId===p.owner_id} onClick={()=>reviewRoomProvider(p,'suspended')}>Suspend</button></div>}
+            {p.status==='suspended'&&<div className="actions"><button className="approve" disabled={workingId===p.owner_id} onClick={()=>reviewRoomProvider(p,'approved')}>Reinstate</button></div>}
+          </article>)}
+          {roomProviders.filter(x=>roomFilter==='all'||x.status===roomFilter).length===0&&<div className="empty">No provider applications in this status.</div>}
+        </div>
+        <h3 className="room-admin-heading">Room listings ({roomListings.filter(x=>roomFilter==='all'||x.status===roomFilter).length})</h3>
+        <div className="room-admin-grid">
+          {roomListings.filter(x=>roomFilter==='all'||x.status===roomFilter).map(r=><article className="room-admin-card" key={r.id}>
+            {r.cover_image_url&&<img className="room-admin-photo" src={r.cover_image_url} alt={r.title}/>}<span className={'badge '+r.status}>{r.status}</span><h3>{r.title}</h3><p>{r.property_type==='hotel_room'?'Hotel room':'Private room'} · {r.city} · {r.area}</p><p>{Number(r.price_per_night_etb).toLocaleString()} ETB / night · Up to {r.max_guests} guests</p><p>{r.address}</p>
+            {r.review_note&&<small>Previous note: {r.review_note}</small>}
+            {r.status==='pending'&&<div className="actions"><button className="approve" disabled={workingId===r.id} onClick={()=>reviewRoomListing(r,'approved')}><Check size={14}/> Approve</button><button className="reject" disabled={workingId===r.id} onClick={()=>reviewRoomListing(r,'rejected')}><X size={14}/> Reject</button></div>}
+            {r.status==='approved'&&<div className="actions"><button className="reject" disabled={workingId===r.id} onClick={()=>reviewRoomListing(r,'suspended')}>Suspend</button></div>}
+            {r.status==='suspended'&&<div className="actions"><button className="approve" disabled={workingId===r.id} onClick={()=>reviewRoomListing(r,'approved')}>Reinstate</button></div>}
+          </article>)}
+          {roomListings.filter(x=>roomFilter==='all'||x.status===roomFilter).length===0&&<div className="empty">No room listings in this status.</div>}
+        </div>
+      </section>}
+\n      <section className="commission">
         <b>Administrator audit</b>
         <p>Approval decisions are written to the live employee_profiles table with reviewer, timestamp and reason. Employees cannot approve themselves. Only the CEO authenticator session can access review controls.</p>
       </section>
