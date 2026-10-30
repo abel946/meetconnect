@@ -116,3 +116,12 @@ body{background:radial-gradient(ellipse at 12% 12%,#242038 0,transparent 28%),#1
 .room-amenities span{padding:5px 7px;border-radius:7px;background:#ffffff0a;border:1px solid #ffffff12;color:#c8c1da;font-size:9px}
 .room-book-btn{height:42px;display:flex;align-items:center;justify-content:center;gap:8px}
 @media(max-width:380px){.room-date-grid{grid-template-columns:1fr 1fr}.room-date-grid label:last-child{grid-column:span 2}}
+
+.room-booking-history{margin-top:18px}
+.room-history-row{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid #ffffff12}
+.room-history-row>div{display:grid;gap:5px}
+.room-history-row b{font-size:12px;color:#f4eefe}
+.room-history-row small{font-size:10px;color:#a7aabd}
+.room-history-row strong{font-size:12px;color:#ffc0d2;text-align:right}
+.room-history-status{font-size:9px;text-align:right;text-transform:capitalize;color:#cbbdff}
+.room-history-status.confirmed{color:#9be5c8}.room-history-status.rejected{color:#ffb0bf}
