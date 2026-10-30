@@ -115,34 +115,75 @@ function App() {
     if (!session?.user) return say('Please sign in first.');
     if (!file) return;
     const isPhoto = kind === 'photo';
-    const allowed = isPhoto ? ['image/jpeg','image/png','image/webp'] : ['video/mp4','video/webm','video/quicktime'];
-    if (!allowed.includes(file.type)) return say(isPhoto ? 'Choose a JPG, PNG or WebP photo.' : 'Choose an MP4, WebM or MOV video.');
+    const allowed = isPhoto
+      ? ['image/jpeg','image/png','image/webp']
+      : ['video/mp4','video/webm','video/quicktime'];
+    if (!allowed.includes(file.type)) {
+      return say(isPhoto
+        ? 'Choose a JPG, PNG or WebP photo.'
+        : 'Choose an MP4, WebM or MOV video.');
+    }
     const maxBytes = isPhoto ? 5 * 1024 * 1024 : 20 * 1024 * 1024;
-    if (file.size > maxBytes) return say(isPhoto ? 'Photo must be 5 MB or smaller.' : 'Video must be 20 MB or smaller.');
+    if (!file.size) return say('This file is empty. Please choose another file.');
+    if (file.size > maxBytes) {
+      return say(isPhoto ? 'Photo must be 5 MB or smaller.' : 'Video must be 20 MB or smaller.');
+    }
+
     if (!isPhoto) {
-      const localUrl = URL.createObjectURL(file);
+      const objectUrl = URL.createObjectURL(file);
       const duration = await new Promise(resolve => {
         const video = document.createElement('video');
+        let settled = false;
+        const finish = value => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          video.removeAttribute('src');
+          video.load();
+          URL.revokeObjectURL(objectUrl);
+          resolve(value);
+        };
+        const timer = setTimeout(() => finish(NaN), 10000);
         video.preload = 'metadata';
-        video.onloadedmetadata = () => { const d = video.duration; URL.revokeObjectURL(localUrl); resolve(d); };
-        video.onerror = () => { URL.revokeObjectURL(localUrl); resolve(NaN); };
-        video.src = localUrl;
+        video.onloadedmetadata = () => finish(video.duration);
+        video.onerror = () => finish(NaN);
+        video.src = objectUrl;
       });
-      if (!Number.isFinite(duration)) return say('Could not read this video. Please choose another file.');
-      if (duration > 10.05) return say('Profile videos must be no longer than 10 seconds.');
+      if (!Number.isFinite(duration) || duration <= 0) {
+        return say('Could not read this video. Please choose an MP4, WebM or MOV video that plays on your phone.');
+      }
+      if (duration > 10) {
+        return say('This video is ' + duration.toFixed(1) + ' seconds long. Please choose a video of 10 seconds or less.');
+      }
     }
+
     setUploading(true);
+    say(isPhoto ? 'Uploading your profile photo…' : 'Uploading your short video…');
     try {
-      const extension = (file.name.split('.').pop() || (isPhoto ? 'jpg' : 'mp4')).toLowerCase().replace(/[^a-z0-9]/g,'');
+      const extension = (file.name.split('.').pop() || (isPhoto ? 'jpg' : 'mp4'))
+        .toLowerCase().replace(/[^a-z0-9]/g,'');
       const path = `${session.user.id}/${kind}-${Date.now()}.${extension}`;
-      const { error } = await supabase.storage.from('employee-media').upload(path, file, { upsert: true, contentType: file.type });
+      const { error } = await supabase.storage
+        .from('employee-media')
+        .upload(path, file, {
+          upsert: true,
+          contentType: file.type,
+          cacheControl: '3600'
+        });
       if (error) throw error;
+
       const { data } = supabase.storage.from('employee-media').getPublicUrl(path);
+      if (!data?.publicUrl) throw new Error('Storage did not return a public media address.');
       patch(isPhoto ? 'avatarUrl' : 'videoUrl', data.publicUrl);
-      say(isPhoto ? 'Profile photo uploaded. Save your profile to submit it for review.' : '10-second profile video uploaded. Save your profile to submit it for review.');
+      say(isPhoto
+        ? 'Profile photo uploaded successfully. Tap Save profile changes to attach it to your profile.'
+        : 'Profile video uploaded successfully. Tap Save profile changes to attach it to your profile.');
     } catch (error) {
-      say('Media upload failed: ' + (error?.message || 'Please try again.'));
-    } finally { setUploading(false); }
+      const detail = error?.message || 'Please check your connection and try again.';
+      say('Media upload failed: ' + detail);
+    } finally {
+      setUploading(false);
+    }
   }
   async function saveProfile(e) {
     e?.preventDefault();
@@ -183,7 +224,7 @@ function App() {
     {tab==='Overview'&&<><div className="prices"><article><small>YOUR SHORT PRICE</small><h2>{money(form.shortPrice)} <i>ETB</i></h2><small>10% platform commission: {money(Number(form.shortPrice)*.1)} ETB</small><p>You receive {money(Number(form.shortPrice)*.9)} ETB before payment fees/taxes.</p></article><article><small>YOUR LONG PRICE</small><h2>{money(form.longPrice)} <i>ETB</i></h2><small>10% platform commission: {money(Number(form.longPrice)*.1)} ETB</small><p>You receive {money(Number(form.longPrice)*.9)} ETB before payment fees/taxes.</p></article></div><section className="panel"><h3>Your workspace</h3>{[[CalendarCheck,'Service requests','Review and manage customer requests','Requests'],[Camera,'Your employee profile','Edit your bio, service area and prices','Profile'],[Wallet,'Earnings overview','See your price and commission split','Profile'],[ShieldCheck,'Safety & support','Keep personal information private','Profile']].map(([I,a,b,d])=><button className="row" key={a} onClick={()=>setTab(d)}><I/><span><b>{a}</b><small>{b}</small></span><ChevronRight/></button>)}</section><div className="notice"><HeartHandshake/><span><b>Your safety comes first</b><p>Keep service requests inside MeetConnect. Never share private location details publicly.</p></span></div></>}
     {tab==='Requests'&&<section className="panel"><div className="panel-title"><h3>Service requests</h3><button className="icon-btn" onClick={()=>loadWorkspace(session)}><RefreshCw size={16}/></button></div>{requests.length===0?<p>No service requests yet. New customer requests will appear here.</p>:requests.map(r=><article className="request-card" key={r.id}><div className="request-top"><b>{r.customer?.display_name||'MeetConnect customer'}</b><span className={'request-status '+r.status}>{r.status}</span></div><p>{r.session_type==='short'?'Short session':'Long session'} · {money(r.agreed_price_etb)} ETB</p><small>{new Date(r.created_at).toLocaleString()}</small>{r.status==='pending'&&<div className="request-actions"><button className="accept" onClick={()=>updateRequest(r.id,'accepted')}><CheckCircle2 size={16}/> Accept</button><button className="decline" onClick={()=>updateRequest(r.id,'declined')}><XCircle size={16}/> Decline</button></div>}</article>)}</section>}
     {tab==='Profile'&&<form className="panel" onSubmit={saveProfile}><h3>Your profile & media</h3><p>Upload a clear profile photo and an optional profile video no longer than 10 seconds. Your profile stays hidden until admin approval.</p>
-    <div className="media-grid"><div className="media-card"><b><Camera size={17}/> Profile photo</b>{form.avatarUrl?<img className="media-preview photo-preview" src={form.avatarUrl} alt="Profile photo preview"/>:<div className="media-placeholder"><UserRound size={30}/><span>No photo uploaded</span></div>}<label className="file-pick"><Upload size={15}/> {uploading?'Uploading…':'Choose photo'}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={e=>uploadMedia(e.target.files?.[0],'photo')}/></label><small>JPG, PNG or WebP · Max 5 MB</small></div><div className="media-card"><b><Video size={17}/> Short profile video</b>{form.videoUrl?<video className="media-preview" src={form.videoUrl} controls playsInline/>:<div className="media-placeholder"><Video size={30}/><span>No video uploaded</span></div>}<label className="file-pick"><Upload size={15}/> {uploading?'Uploading…':'Choose video'}<input type="file" accept="video/mp4,video/webm,video/quicktime" disabled={uploading} onChange={e=>uploadMedia(e.target.files?.[0],'video')}/></label><small>Max 10 seconds · MP4/WebM/MOV · Max 20 MB</small></div></div>
+    <div className="media-grid"><div className="media-card"><b><Camera size={17}/> Profile photo</b>{form.avatarUrl?<img className="media-preview photo-preview" src={form.avatarUrl} alt="Profile photo preview"/>:<div className="media-placeholder"><UserRound size={30}/><span>No photo uploaded</span></div>}<label className="file-pick"><Upload size={15}/> {uploading?'Uploading…':'Choose photo'}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={e=>{const file=e.target.files?.[0];uploadMedia(file,'photo');e.target.value='';}}/></label><small>JPG, PNG or WebP · Max 5 MB</small></div><div className="media-card"><b><Video size={17}/> Short profile video</b>{form.videoUrl?<video className="media-preview" src={form.videoUrl} controls playsInline/>:<div className="media-placeholder"><Video size={30}/><span>No video uploaded</span></div>}<label className="file-pick"><Upload size={15}/> {uploading?'Uploading…':'Choose video'}<input type="file" accept="video/mp4,video/webm,video/quicktime" disabled={uploading} onChange={e=>{const file=e.target.files?.[0];uploadMedia(file,'video');e.target.value='';}}/></label><small>Max 10 seconds · MP4/WebM/MOV · Max 20 MB</small></div></div>
     <h3>Profile details & pricing</h3><p>Complete your details accurately. Your profile stays hidden from discovery until an administrator approves it.</p><label>Full name<input required value={form.name} onChange={e=>patch('name',e.target.value)} placeholder="Your full name"/></label><label>Login account<input value={session.user.user_metadata?.account_name || accountName || "Account name"} readOnly/></label><label>Gender<select value={form.gender} onChange={e=>patch('gender',e.target.value)}><option value="female">Female</option><option value="male">Male</option></select></label><label>Date of birth<input type="date" required max={adultMax()} value={form.birthDate} onChange={e=>patch('birthDate',e.target.value)}/></label><label>City / general area<input required value={form.area} onChange={e=>patch('area',e.target.value)} placeholder="Addis Ababa"/></label><label>Service area<input required value={form.serviceArea} onChange={e=>patch('serviceArea',e.target.value)} placeholder="e.g. Bole, Addis Ababa"/></label><label>Introduction / bio<textarea maxLength={1000} rows="4" value={form.bio} onChange={e=>patch('bio',e.target.value)} placeholder="Introduce yourself and your services"/></label><label>Short session price (ETB)<input required type="number" min="1" value={form.shortPrice} onChange={e=>patch('shortPrice',e.target.value)}/></label><label>Long session price (ETB)<input required type="number" min="1" value={form.longPrice} onChange={e=>patch('longPrice',e.target.value)}/></label><div className="commission-note">MeetConnect commission is 10%. You receive 90% of the session price before payment-provider fees and applicable taxes.</div><button className="submit" disabled={saving}>{saving?'Saving securely…':status==='approved'?'Save profile changes':'Submit for admin review'}</button></form>}
     <footer>MeetConnect · Employee portal · <button className="footer-link" onClick={signOut}>Sign out</button></footer></main>;
 }
