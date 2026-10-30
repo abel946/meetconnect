@@ -29,6 +29,10 @@ jobs:
             app_id: com.meetconnect.admin
             app_name: MeetConnect Admin
             app_url: https://meetconnect-admin.vercel.app
+          - app: room-service-employee
+            app_id: com.meetconnect.roomservice
+            app_name: MeetConnect Room Service
+            app_url: https://meetconnect-room-service-employee.vercel.app
     steps:
       - name: Checkout
         uses: actions/checkout@v4
