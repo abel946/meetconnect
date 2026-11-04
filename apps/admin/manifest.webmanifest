@@ -1,0 +1,17 @@
+{
+  "name": "MeetConnect Admin",
+  "short_name": "MeetConnect",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#10131f",
+  "theme_color": "#10131f",
+  "icons": [
+    {
+      "src": "/meetconnect-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
