@@ -1,13 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
-import QRCode from 'qrcode';
 import { Users, UserCheck, ShieldAlert, Clock, RefreshCw, Database, Activity, ShieldCheck, LogOut, Search, Check, X, Video, Camera, LockKeyhole, KeyRound, Building2 } from 'lucide-react';
 import './style.css';
 
 const url = import.meta.env.VITE_SUPABASE_URL;
 const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const ADMIN_EMAIL = 'abemelekbekele375@gmail.com';
 const supabase = url && key ? createClient(url, key, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } }) : null;
 
 function Brand() {
@@ -29,12 +27,12 @@ function App() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [updatedAt, setUpdatedAt] = useState('');
-  const [username, setUsername] = useState('CEO');
-  const [code, setCode] = useState('');
+  const [username] = useState('CEO');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordConfigured, setPasswordConfigured] = useState(false);
   const [authBusy, setAuthBusy] = useState(false);
   const [setupBusy, setSetupBusy] = useState(false);
-  const [setup, setSetup] = useState(null);
-  const [setupCode, setSetupCode] = useState('');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState('pending');
   const [workingId, setWorkingId] = useState('');
@@ -104,52 +102,26 @@ function App() {
     setIsAdmin(true);
   }, []);
 
-  const beginAuthenticatorSetup = useCallback(async current => {
-    if (!supabase || !current?.access_token) return;
-    setSetupBusy(true);
-    setError('');
-    try {
-      const { data, error: fnError } = await supabase.functions.invoke('meetconnect-admin-auth', { body: { action: 'setup' } });
-      if (fnError || data?.error) {
-        const message = data?.error || fnError?.message || 'Could not start authenticator setup.';
-        await supabase.auth.signOut();
-        setSession(null); setIsAdmin(false);
-        if (message.toLowerCase().includes('already configured')) setNotice('Google Authenticator is already configured. Sign in below with CEO and the current six-digit code.');
-        else setError(message);
-        return;
-      }
-      const qr = await QRCode.toDataURL(data.otpauthUri, { width: 220, margin: 2 });
-      setSetup({ secret: data.secret, qr });
-      setNotice('Scan the QR code in Google Authenticator, then enter the six-digit code shown there.');
-    } catch (e) {
-      setError(e?.message || 'Could not prepare Google Authenticator.');
-      await supabase.auth.signOut();
-      setSession(null); setIsAdmin(false);
-    } finally { setSetupBusy(false); }
-  }, []);
-
   useEffect(() => {
     if (!supabase) { setBusy(false); setError('Admin environment is missing the Supabase URL or public key.'); return; }
     let alive = true;
-    supabase.auth.getSession().then(async ({ data }) => {
+    Promise.all([
+      supabase.auth.getSession(),
+      supabase.functions.invoke('meetconnect-admin-auth', { body: { action: 'status' } })
+    ]).then(async ([sessionResult, statusResult]) => {
       if (!alive) return;
-      const current = data?.session;
-      if (current && new URLSearchParams(window.location.search).get('setup') === '1') {
-        await verifyAdminSession(current);
-        if (alive) await beginAuthenticatorSetup(current);
-        window.history.replaceState({}, document.title, window.location.pathname);
-      } else if (current) {
-        await verifyAdminSession(current);
-      }
+      if (statusResult.data && !statusResult.error) setPasswordConfigured(statusResult.data.configured === true);
+      const current = sessionResult.data?.session;
+      if (current) await verifyAdminSession(current);
       if (alive) setBusy(false);
-    });
+    }).catch(() => { if (alive) setBusy(false); });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, next) => {
       if (next) setSession(next);
       else { setSession(null); setIsAdmin(false); setEmployees([]); }
     });
     loadStats();
     return () => { alive = false; subscription.unsubscribe(); };
-  }, [verifyAdminSession, beginAuthenticatorSetup, loadStats]);
+  }, [verifyAdminSession, loadStats]);
 
   useEffect(() => { if (isAdmin && session) { loadEmployees(); loadRoomData(); loadStats(); } }, [isAdmin, session, loadEmployees, loadRoomData, loadStats]);
 
@@ -168,11 +140,11 @@ function App() {
   async function login(e) {
     e?.preventDefault();
     if (!supabase) return;
-    if (!/^\d{6}$/.test(code.trim())) { setError('Enter the current six-digit Google Authenticator code.'); return; }
+    if (!password) { setError('Enter your CEO password.'); return; }
     setAuthBusy(true); setError(''); setNotice('');
     try {
       const { data, error: fnError } = await supabase.functions.invoke('meetconnect-admin-auth', {
-        body: { action: 'login', username: username.trim().toUpperCase(), code: code.trim() }
+        body: { action: 'login', username, password }
       });
       if (fnError || data?.error) throw new Error(data?.error || fnError?.message || 'Sign-in failed.');
       if (!data?.session?.access_token || !data?.session?.refresh_token) throw new Error('Admin authentication returned no session.');
@@ -181,33 +153,31 @@ function App() {
       });
       if (sessionError || !sessionData?.session) throw sessionError || new Error('Could not establish admin session.');
       await verifyAdminSession(sessionData.session);
-      setCode('');
+      setPassword('');
     } catch (e) { setError(e?.message || 'Sign-in failed.'); }
     finally { setAuthBusy(false); }
   }
 
-  async function sendSetupLink() {
-    if (!supabase) return;
-    setSetupBusy(true); setError(''); setNotice('');
-    const redirectTo = window.location.origin + '/?setup=1';
-    const { error: sendError } = await supabase.auth.signInWithOtp({
-      email: ADMIN_EMAIL,
-      options: { emailRedirectTo: redirectTo, shouldCreateUser: false }
-    });
-    setSetupBusy(false);
-    if (sendError) setError('Could not send the one-time setup link: ' + sendError.message);
-    else setNotice('A one-time setup link was sent to the registered CEO email. Open it on this device to configure Google Authenticator. After setup, future admin sign-ins use CEO + authenticator code only.');
-  }
-
-  async function confirmSetup(e) {
+  async function createAdminPassword(e) {
     e?.preventDefault();
-    if (!/^\d{6}$/.test(setupCode.trim())) { setError('Enter the six-digit code from Google Authenticator.'); return; }
-    setSetupBusy(true); setError('');
-    const { data, error: fnError } = await supabase.functions.invoke('meetconnect-admin-auth', { body: { action: 'confirmSetup', code: setupCode.trim() } });
-    setSetupBusy(false);
-    if (fnError || data?.error) { setError(data?.error || fnError?.message || 'Could not verify the authenticator.'); return; }
-    await supabase.auth.signOut();
-    setSetup(null); setSetupCode(''); setNotice('Google Authenticator is now active. Sign in with CEO and the current six-digit code.');
+    if (!supabase) return;
+    if (password.length < 12) { setError('Use at least 12 characters for the CEO password.'); return; }
+    if (password !== confirmPassword) { setError('The passwords do not match.'); return; }
+    if (!session?.access_token) {
+      setError('For first-time setup, an existing authorized CEO session is required. This prevents anyone else from claiming the CEO account.');
+      return;
+    }
+    setSetupBusy(true); setError(''); setNotice('');
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke('meetconnect-admin-auth', {
+        body: { action: 'setup', username, password }
+      });
+      if (fnError || data?.error) throw new Error(data?.error || fnError?.message || 'Could not save the CEO password.');
+      setPasswordConfigured(true);
+      setPassword(''); setConfirmPassword('');
+      setNotice('CEO password created. You can now sign out and log in using CEO + password only.');
+    } catch (e) { setError(e?.message || 'Could not create the CEO password.'); }
+    finally { setSetupBusy(false); }
   }
 
   async function reviewEmployee(employee, nextStatus) {
@@ -266,7 +236,7 @@ function App() {
 
   async function signOut() {
     if (supabase) await supabase.auth.signOut();
-    setSession(null); setIsAdmin(false); setEmployees([]); setCode(''); setSetup(null);
+    setSession(null); setIsAdmin(false); setEmployees([]); setPassword(''); setConfirmPassword('');
     setNotice('You have signed out of the admin console.');
   }
 
@@ -276,7 +246,7 @@ function App() {
       <small className="section">WORKSPACE</small>
       <div className="nav selected"><Activity size={17}/>Live Overview</div>
       <div className="nav"><UserCheck size={17}/>Employee Approval</div>
-      <div className="asidebottom"><ShieldCheck/><span><b>{isAdmin ? 'Administrator session' : 'Protected controls'}</b><small>{isAdmin ? 'CEO authenticator verified' : 'Review actions require CEO sign-in'}</small></span></div>
+      <div className="asidebottom"><ShieldCheck/><span><b>{isAdmin ? 'Administrator session' : 'Protected controls'}</b><small>{isAdmin ? 'CEO password verified' : 'Review actions require CEO sign-in'}</small></span></div>
     </aside>
     <main className="content">
       <header>
@@ -303,24 +273,27 @@ function App() {
         </div>
       </section>
 
-      {!isAdmin ? <section className="panel auth-card">
-        <div className="panelhead"><div><h2><LockKeyhole size={17} style={{verticalAlign:'middle',marginRight:8}}/>Administrator access</h2><p>Employee approval is restricted to the registered CEO administrator.</p></div><span className="badge pending">Protected</span></div>
+      {!passwordConfigured ? <section className="panel auth-card">
+        <div className="panelhead"><div><h2><LockKeyhole size={17} style={{verticalAlign:'middle',marginRight:8}}/>Create CEO password</h2><p>One-time setup for the MeetConnect CEO administrator account.</p></div><span className="badge pending">First-time setup</span></div>
+        <div style={{padding:20}}>
+          <form onSubmit={createAdminPassword}>
+            <label>CEO username<input value="CEO" readOnly autoComplete="username"/></label>
+            <label>Create password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="new-password" minLength={12} maxLength={128} required placeholder="At least 12 characters"/></label>
+            <label>Confirm password<input type="password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} autoComplete="new-password" minLength={12} maxLength={128} required placeholder="Enter the same password again"/></label>
+            <button className="primary" disabled={setupBusy}>{setupBusy ? 'Saving password…' : 'Create CEO password'}</button>
+          </form>
+          <div className="security-note" style={{marginTop:13}}>This one-time setup is restricted to an already authenticated CEO administrator session. No email, phone, OTP or authenticator code is used for future logins.</div>
+        </div>
+      </section> : !isAdmin ? <section className="panel auth-card">
+        <div className="panelhead"><div><h2><LockKeyhole size={17} style={{verticalAlign:'middle',marginRight:8}}/>CEO administrator login</h2><p>Sign in with your fixed CEO username and password.</p></div><span className="badge pending">Protected</span></div>
         <div style={{padding:20}}>
           <form onSubmit={login}>
-            <label>Administrator username<input value={username} onChange={e=>setUsername(e.target.value)} autoComplete="username" maxLength={20}/></label>
-            <label>Google Authenticator code<input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,'').slice(0,6))} placeholder="6-digit code" maxLength={6}/></label>
-            <button className="primary" disabled={authBusy}>{authBusy ? 'Verifying…' : 'Sign in securely'}</button>
+            <label>Username<input value="CEO" readOnly autoComplete="username"/></label>
+            <label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete="current-password" maxLength={128} required placeholder="Enter CEO password"/></label>
+            <button className="primary" disabled={authBusy}>{authBusy ? 'Signing in…' : 'Login'}</button>
           </form>
-          <div className="security-note" style={{marginTop:13}}>No admin registration is available. Only the CEO account on the server-side allowlist can sign in.</div>
-          <button className="secondary" disabled={setupBusy} onClick={sendSetupLink}><KeyRound size={15}/> {setupBusy ? 'Sending…' : 'Set up Google Authenticator (first time)'}</button>
+          <div className="security-note" style={{marginTop:13}}>CEO-only access. Password attempts are rate-limited and the password is stored as a salted cryptographic hash.</div>
         </div>
-      </section> : setup ? <section className="panel auth-card">
-        <div className="panelhead"><div><h2>Set up Google Authenticator</h2><p>Scan this QR code, then verify the first six-digit code.</p></div></div>
-        <div className="qr-wrap"><img className="auth-qr" src={setup.qr} alt="Google Authenticator setup QR code"/><small>Manual setup key</small><code className="secret-key">{setup.secret}</code></div>
-        <form onSubmit={confirmSetup} style={{padding:'0 20px 20px'}}>
-          <label>Six-digit verification code<input inputMode="numeric" value={setupCode} onChange={e=>setSetupCode(e.target.value.replace(/\D/g,'').slice(0,6))} maxLength={6}/></label>
-          <button className="primary" disabled={setupBusy}>Verify and activate</button>
-        </form>
       </section> : <section className="panel">
         <div className="panelhead">
           <div><h2><UserCheck size={17} style={{verticalAlign:'middle',marginRight:8}}/>Employee approval</h2><p>Review submitted employee profiles, photos and short videos before publishing.</p></div>
@@ -388,7 +361,7 @@ function App() {
         </div>
       <section className="commission">
         <b>Administrator audit</b>
-        <p>Approval decisions are written to the live employee_profiles table with reviewer, timestamp and reason. Employees cannot approve themselves. Only the CEO authenticator session can access review controls.</p>
+        <p>Approval decisions are written to the live employee_profiles table with reviewer, timestamp and reason. Employees cannot approve themselves. Only the CEO password-authenticated session can access review controls.</p>
       </section>
       <footer>MeetConnect Admin · Live database · Protected approval controls</footer>
     </main>
