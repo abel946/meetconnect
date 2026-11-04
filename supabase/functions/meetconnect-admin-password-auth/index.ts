@@ -63,7 +63,7 @@ Deno.serve(async (req: Request) => {
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
   if (!url || !serviceKey || !anonKey) return reply({ error: "Admin authentication service is not configured." }, 500, origin);
 
-  let body: { action?: string; username?: string; password?: string };
+  let body: { action?: string; username?: string; password?: string; setupToken?: string };
   try { body = await req.json(); } catch { return reply({ error: "Invalid request." }, 400, origin); }
   const action = String(body.action || "");
   const username = String(body.username || "").trim().toUpperCase();
@@ -84,27 +84,33 @@ Deno.serve(async (req: Request) => {
   }
 
   if (action === "setup") {
-    const token = decodeBearer(req);
-    if (!token) return reply({ error: "An existing authorized CEO session is required for first-time password setup." }, 401, origin);
-    const { data: verified, error: verifyError } = await publicClient.auth.getUser(token);
-    const userId = verified.user?.id;
-    if (verifyError || !userId) return reply({ error: "The current CEO session is invalid. Sign in with the existing admin session to complete one-time setup." }, 401, origin);
-    const { data: member } = await admin.from("meetconnect_admin_members").select("user_id").eq("user_id", userId).maybeSingle();
-    const { data: userInfo, error: userError } = await admin.auth.admin.getUserById(userId);
-    if (!member || userError || userInfo.user?.email?.toLowerCase() !== CEO_EMAIL) {
-      return reply({ error: "Only the registered CEO administrator can create this password." }, 403, origin);
+    const setupToken = String(body.setupToken || "");
+    if (setupToken.length < 32 || setupToken.length > 256) return reply({ error: "The one-time CEO setup link is invalid or expired." }, 401, origin);
+    const tokenHash = await digest(setupToken);
+    const { data: tokenRow } = await admin.from("meetconnect_admin_setup_tokens")
+      .select("token_hash").eq("token_hash", tokenHash).is("used_at", null)
+      .gt("expires_at", new Date().toISOString()).maybeSingle();
+    if (!tokenRow) return reply({ error: "The one-time CEO setup link is invalid, expired or already used." }, 401, origin);
+
+    const { data: member } = await admin.from("meetconnect_admin_members").select("user_id").limit(1).maybeSingle();
+    if (!member?.user_id) return reply({ error: "The CEO administrator account is not configured." }, 403, origin);
+    const { data: userInfo, error: userError } = await admin.auth.admin.getUserById(member.user_id);
+    if (userError || userInfo.user?.email?.toLowerCase() !== CEO_EMAIL) {
+      return reply({ error: "The registered CEO administrator account could not be verified." }, 403, origin);
     }
-    const { data: existing, error: readError } = await admin.from("meetconnect_admin_password_credentials")
+    const { data: existing } = await admin.from("meetconnect_admin_password_credentials")
       .select("password_set_at").eq("username", "CEO").maybeSingle();
-    if (readError) return reply({ error: "Could not verify password setup status." }, 500, origin);
     if (existing?.password_set_at) return reply({ error: "The CEO password has already been created. Use the login form." }, 409, origin);
+
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const hash = await hashPassword(password, salt);
     const { error: insertError } = await admin.from("meetconnect_admin_password_credentials").insert({
-      username: "CEO", user_id: userId, password_salt: toBase64(salt),
+      username: "CEO", user_id: member.user_id, password_salt: toBase64(salt),
       password_hash: toBase64(hash), password_set_at: new Date().toISOString()
     });
     if (insertError) return reply({ error: "Password setup could not be saved. It may already have been completed." }, 409, origin);
+    await admin.from("meetconnect_admin_setup_tokens").update({ used_at: new Date().toISOString() })
+      .eq("token_hash", tokenHash).is("used_at", null);
     return reply({ success: true, message: "CEO password created." }, 200, origin);
   }
 
