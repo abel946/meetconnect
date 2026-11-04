@@ -107,7 +107,7 @@ function App() {
     let alive = true;
     Promise.all([
       supabase.auth.getSession(),
-      supabase.functions.invoke('meetconnect-admin-auth', { body: { action: 'status' } })
+      supabase.functions.invoke('meetconnect-admin-password-auth', { body: { action: 'status' } })
     ]).then(async ([sessionResult, statusResult]) => {
       if (!alive) return;
       if (statusResult.data && !statusResult.error) setPasswordConfigured(statusResult.data.configured === true);
@@ -143,7 +143,7 @@ function App() {
     if (!password) { setError('Enter your CEO password.'); return; }
     setAuthBusy(true); setError(''); setNotice('');
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('meetconnect-admin-auth', {
+      const { data, error: fnError } = await supabase.functions.invoke('meetconnect-admin-password-auth', {
         body: { action: 'login', username, password }
       });
       if (fnError || data?.error) throw new Error(data?.error || fnError?.message || 'Sign-in failed.');
@@ -169,7 +169,7 @@ function App() {
     }
     setSetupBusy(true); setError(''); setNotice('');
     try {
-      const { data, error: fnError } = await supabase.functions.invoke('meetconnect-admin-auth', {
+      const { data, error: fnError } = await supabase.functions.invoke('meetconnect-admin-password-auth', {
         body: { action: 'setup', username, password }
       });
       if (fnError || data?.error) throw new Error(data?.error || fnError?.message || 'Could not save the CEO password.');
