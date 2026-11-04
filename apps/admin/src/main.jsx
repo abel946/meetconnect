@@ -31,6 +31,7 @@ function App() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordConfigured, setPasswordConfigured] = useState(false);
+  const [setupToken, setSetupToken] = useState(() => new URLSearchParams(window.location.search).get('setup_key') || sessionStorage.getItem('meetconnect_admin_setup_key') || '');
   const [authBusy, setAuthBusy] = useState(false);
   const [setupBusy, setSetupBusy] = useState(false);
   const [query, setQuery] = useState('');
@@ -105,6 +106,15 @@ function App() {
   useEffect(() => {
     if (!supabase) { setBusy(false); setError('Admin environment is missing the Supabase URL or public key.'); return; }
     let alive = true;
+    const params = new URLSearchParams(window.location.search);
+    const incomingSetupToken = params.get('setup_key');
+    if (incomingSetupToken) {
+      sessionStorage.setItem('meetconnect_admin_setup_key', incomingSetupToken);
+      setSetupToken(incomingSetupToken);
+      params.delete('setup_key');
+      const cleanUrl = window.location.pathname + (params.toString() ? '?' + params.toString() : '') + window.location.hash;
+      window.history.replaceState({}, document.title, cleanUrl);
+    }
     Promise.all([
       supabase.auth.getSession(),
       supabase.functions.invoke('meetconnect-admin-password-auth', { body: { action: 'status' } })
@@ -163,17 +173,15 @@ function App() {
     if (!supabase) return;
     if (password.length < 12) { setError('Use at least 12 characters for the CEO password.'); return; }
     if (password !== confirmPassword) { setError('The passwords do not match.'); return; }
-    if (!session?.access_token) {
-      setError('For first-time setup, an existing authorized CEO session is required. This prevents anyone else from claiming the CEO account.');
-      return;
-    }
+    if (!setupToken) { setError('Open the one-time CEO setup link to authorize first-time password creation.'); return; }
     setSetupBusy(true); setError(''); setNotice('');
     try {
       const { data, error: fnError } = await supabase.functions.invoke('meetconnect-admin-password-auth', {
-        body: { action: 'setup', username, password }
+        body: { action: 'setup', username, password, setupToken }
       });
       if (fnError || data?.error) throw new Error(data?.error || fnError?.message || 'Could not save the CEO password.');
       setPasswordConfigured(true);
+      setSetupToken(''); sessionStorage.removeItem('meetconnect_admin_setup_key');
       setPassword(''); setConfirmPassword('');
       setNotice('CEO password created. You can now sign out and log in using CEO + password only.');
     } catch (e) { setError(e?.message || 'Could not create the CEO password.'); }
@@ -273,8 +281,8 @@ function App() {
         </div>
       </section>
 
-      {!passwordConfigured ? <section className="panel auth-card">
-        <div className="panelhead"><div><h2><LockKeyhole size={17} style={{verticalAlign:'middle',marginRight:8}}/>Create CEO password</h2><p>One-time setup for the MeetConnect CEO administrator account.</p></div><span className="badge pending">First-time setup</span></div>
+      {!passwordConfigured ? setupToken ? <section className="panel auth-card">
+        <div className="panelhead"><div><h2><LockKeyhole size={17} style={{verticalAlign:'middle',marginRight:8}}/>Create CEO password</h2><p>Set your permanent MeetConnect Admin password.</p></div><span className="badge pending">One-time setup</span></div>
         <div style={{padding:20}}>
           <form onSubmit={createAdminPassword}>
             <label>CEO username<input value="CEO" readOnly autoComplete="username"/></label>
@@ -282,8 +290,11 @@ function App() {
             <label>Confirm password<input type="password" value={confirmPassword} onChange={e=>setConfirmPassword(e.target.value)} autoComplete="new-password" minLength={12} maxLength={128} required placeholder="Enter the same password again"/></label>
             <button className="primary" disabled={setupBusy}>{setupBusy ? 'Saving password…' : 'Create CEO password'}</button>
           </form>
-          <div className="security-note" style={{marginTop:13}}>This one-time setup is restricted to an already authenticated CEO administrator session. No email, phone, OTP or authenticator code is used for future logins.</div>
+          <div className="security-note" style={{marginTop:13}}>This secure setup link can be used once. After setup, all logins use CEO + password only.</div>
         </div>
+      </section> : <section className="panel auth-card">
+        <div className="panelhead"><div><h2><LockKeyhole size={17} style={{verticalAlign:'middle',marginRight:8}}/>CEO password setup</h2><p>The CEO password has not been created yet.</p></div><span className="badge pending">Setup required</span></div>
+        <div style={{padding:20}}><p className="security-note">Open the private one-time setup link provided to the CEO to create the password. No email, phone, OTP or authenticator verification is used.</p></div>
       </section> : !isAdmin ? <section className="panel auth-card">
         <div className="panelhead"><div><h2><LockKeyhole size={17} style={{verticalAlign:'middle',marginRight:8}}/>CEO administrator login</h2><p>Sign in with your fixed CEO username and password.</p></div><span className="badge pending">Protected</span></div>
         <div style={{padding:20}}>
