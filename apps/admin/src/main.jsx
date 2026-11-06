@@ -19,6 +19,7 @@ function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [stats, setStats] = useState(null);
   const [employees, setEmployees] = useState([]);
+  const [connectionRequests, setConnectionRequests] = useState([]);
   const [roomProviders, setRoomProviders] = useState([]);
   const [roomListings, setRoomListings] = useState([]);
   const [roomBookings, setRoomBookings] = useState([]);
@@ -90,6 +91,23 @@ function App() {
     setRoomBookings(bookings||[]);
   }, [session]);
 
+  const loadConnectionRequests = useCallback(async () => {
+    if (!supabase || !session) return;
+    const { data: rows, error: requestError } = await supabase.from('connection_requests')
+      .select('id,customer_id,employee_id,session_type,agreed_price_etb,status,created_at,venue_type,venue_name,room_name,room_number,site_position')
+      .order('created_at', { ascending: false });
+    if (requestError) { setError('Could not load connection requests: ' + requestError.message); return; }
+    const ids = [...new Set((rows || []).flatMap(r => [r.customer_id, r.employee_id]))];
+    let profiles = [];
+    if (ids.length) {
+      const { data, error: profileError } = await supabase.from('profiles').select('id,display_name').in('id', ids);
+      if (profileError) { setError('Could not load request names: ' + profileError.message); return; }
+      profiles = data || [];
+    }
+    const names = new Map(profiles.map(p => [p.id, p.display_name]));
+    setConnectionRequests((rows || []).map(r => ({ ...r, customer_name: names.get(r.customer_id) || 'Customer', employee_name: names.get(r.employee_id) || 'Employee' })));
+  }, [session]);
+
   const verifyAdminSession = useCallback(async current => {
     if (!current || !supabase) { setSession(null); setIsAdmin(false); return; }
     const { data, error: checkError } = await supabase.rpc('is_meetconnect_admin');
@@ -133,7 +151,7 @@ function App() {
     return () => { alive = false; subscription.unsubscribe(); };
   }, [verifyAdminSession, loadStats]);
 
-  useEffect(() => { if (isAdmin && session) { loadEmployees(); loadRoomData(); loadStats(); } }, [isAdmin, session, loadEmployees, loadRoomData, loadStats]);
+  useEffect(() => { if (isAdmin && session) { loadEmployees(); loadRoomData(); loadConnectionRequests(); loadStats(); } }, [isAdmin, session, loadEmployees, loadRoomData, loadConnectionRequests, loadStats]);
 
   const counts = useMemo(() => ({
     pending: employees.filter(x => x.status === 'pending').length,
@@ -328,6 +346,20 @@ function App() {
             {employee.status==='pending' && <div className="actions"><button className="approve" disabled={workingId===employee.id} onClick={()=>reviewEmployee(employee,'approved')}><Check size={14}/> Approve</button><button className="reject" disabled={workingId===employee.id} onClick={()=>reviewEmployee(employee,'rejected')}><X size={14}/> Reject</button></div>}
             {employee.status==='approved' && <div className="actions"><button className="reject" disabled={workingId===employee.id} onClick={()=>reviewEmployee(employee,'suspended')}>Suspend</button></div>}
             {employee.status==='suspended' && <div className="actions"><button className="approve" disabled={workingId===employee.id} onClick={()=>reviewEmployee(employee,'approved')}><Check size={14}/> Reinstate</button></div>}
+          </article>)}
+        </div>}
+      </section>}
+      {isAdmin && <section className="panel">
+        <div className="panelhead"><div><h2>Connection requests</h2><p>Customer, employee, service and meeting-place details.</p></div><button className="refresh" onClick={loadConnectionRequests}><RefreshCw size={16}/></button></div>
+        {connectionRequests.length===0 ? <div className="empty">No connection requests found.</div> : <div className="connection-request-list">
+          {connectionRequests.map(r=><article className="room-admin-card" key={r.id}>
+            <span className={'badge '+r.status}>{r.status}</span>
+            <h3>{r.customer_name} → {r.employee_name}</h3>
+            <p>{r.session_type==='short'?'Short session':'Long session'} · {Number(r.agreed_price_etb).toLocaleString()} ETB</p>
+            <p><b>{r.venue_type==='hotel'?'Hotel':r.venue_type==='club_bar'?'Club / Bar':'Meeting place'}:</b> {r.venue_name||'Not specified'}</p>
+            {r.venue_type==='hotel'&&<p>Room: {r.room_name||'—'} · Room no.: {r.room_number||'—'}</p>}
+            {r.venue_type==='club_bar'&&r.site_position&&<p>Site position: {r.site_position==='right_edge'?'Right edge':r.site_position==='left_edge'?'Left edge':'Middle'}</p>}
+            <small>{r.created_at?new Date(r.created_at).toLocaleString():'—'} · Request ID: {r.id}</small>
           </article>)}
         </div>}
       </section>}
