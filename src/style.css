@@ -184,3 +184,13 @@ body{background:radial-gradient(ellipse at 12% 12%,#242038 0,transparent 28%),#1
 .toast{border:1px solid #ffffff80}
 @keyframes mc-screen-sheen{0%,100%{background-position:100% 0;opacity:.35}50%{background-position:0 0;opacity:.8}}
 @media(prefers-reduced-motion:reduce){.app-shell:after{animation:none}}
+
+/* Meeting place details on customer connection requests */
+.meeting-place{margin-top:14px;padding:14px;border:1px solid rgba(255,255,255,.13);border-radius:16px;background:rgba(15,23,42,.35)}
+.meeting-place h4{margin:0 0 10px;font-size:14px}
+.meeting-place label{display:flex;flex-direction:column;gap:6px;margin-top:10px;font-size:12px;color:var(--muted,#aab4c8)}
+.meeting-place input,.meeting-place select{width:100%;min-width:0;padding:11px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.16);background:rgba(7,13,28,.72);color:inherit;font:inherit}
+.place-type{display:flex;gap:8px}
+.place-type button{flex:1;padding:10px;border:1px solid rgba(255,255,255,.16);border-radius:10px;background:transparent;color:inherit}
+.place-type button.active{border-color:#5ea6ff;background:rgba(70,140,255,.18)}
+.room-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
