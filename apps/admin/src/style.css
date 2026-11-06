@@ -44,3 +44,5 @@
 .room-admin-card p{font-size:11px;line-height:1.5;color:#b6afc7;margin:6px 0}
 .room-admin-card small{font-size:10px;color:#d7b9a5}
 .room-admin-photo{display:block;width:100%;height:145px;object-fit:cover;border-radius:10px;margin-bottom:10px}
+
+.connection-request-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;padding:14px}
