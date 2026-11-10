@@ -329,3 +329,22 @@ body{background:radial-gradient(ellipse at 12% 12%,#242038 0,transparent 28%),#1
 @media(prefers-reduced-motion:reduce){
   .hero-logo-wrap,.hero-logo,.logo-halo,.gate-art .orbit-a,.gate-art .orbit-b{animation:none}
 }
+
+
+/* Improve visibility of the blue MeetConnect symbol on its white logo background */
+.gate .brand-mark,
+.hero-logo{
+  filter:contrast(1.22) saturate(1.75);
+  background:#fff;
+  border:2px solid #4b8dff;
+  box-shadow:0 0 0 3px #4b8dff22,0 0 22px #438bff55,0 0 42px #8b78ff2b;
+}
+.gate .brand-mark{
+  border-radius:22px;
+}
+.hero-logo{
+  border-radius:34px;
+}
+@media(prefers-reduced-motion:reduce){
+  .gate .brand-mark,.hero-logo{filter:contrast(1.22) saturate(1.75)}
+}
