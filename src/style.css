@@ -254,3 +254,20 @@ body{background:radial-gradient(ellipse at 12% 12%,#242038 0,transparent 28%),#1
   .gate .brand-mark{animation:none;will-change:auto}
 }
 
+/* Make the animated MeetConnect logo prominent on welcome and registration */
+.gate .brand-mark{
+  width:76px;
+  height:76px;
+  flex:0 0 76px;
+  border-radius:22px;
+  object-fit:contain;
+  box-shadow:0 10px 30px #d778a855,0 0 24px #ff8fb955;
+}
+.gate .brand-mark:after{
+  border-radius:25px;
+  inset:-6px;
+}
+@media(max-height:720px){
+  .gate .brand-mark{width:66px;height:66px;flex-basis:66px;border-radius:20px}
+}
+
