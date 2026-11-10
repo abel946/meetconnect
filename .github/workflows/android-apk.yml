@@ -45,7 +45,15 @@ jobs:
           if [ ! -d android ]; then
             npx cap add android
           fi
-          npx cap sync android
+
+      - name: Generate native Android launcher icon from MeetConnect logo
+        run: |
+          mkdir -p assets
+          cp public/meetconnect-logo.jpg assets/logo.jpg
+          npx --yes @capacitor/assets generate --android --assetPath assets --iconBackgroundColor '#ffffff'
+
+      - name: Sync Android project
+        run: npx cap sync android
 
       - name: Build installable debug APK
         working-directory: android
