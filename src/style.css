@@ -237,3 +237,20 @@ body{background:radial-gradient(ellipse at 12% 12%,#242038 0,transparent 28%),#1
   transition:background-color 9999s ease-out 0s;
 }
 
+/* Animated approved logo on the welcome and registration screens only */
+.gate .brand-mark{
+  transform-origin:center;
+  animation:gate-logo-motion 3.2s ease-in-out infinite;
+  filter:drop-shadow(0 0 7px #ff8fb966) drop-shadow(0 0 14px #b6a5ff44);
+  will-change:transform,filter;
+}
+@keyframes gate-logo-motion{
+  0%,100%{transform:translateY(0) scale(1) rotate(0deg);filter:drop-shadow(0 0 6px #ff8fb955) drop-shadow(0 0 12px #b6a5ff33)}
+  25%{transform:translateY(-3px) scale(1.045) rotate(-3deg);filter:drop-shadow(0 0 11px #ff8fb9aa) drop-shadow(0 0 19px #b6a5ff66)}
+  50%{transform:translateY(0) scale(1.02) rotate(0deg);filter:drop-shadow(0 0 8px #ff8fb977) drop-shadow(0 0 16px #b6a5ff55)}
+  75%{transform:translateY(-2px) scale(1.04) rotate(3deg);filter:drop-shadow(0 0 11px #ff8fb9aa) drop-shadow(0 0 19px #b6a5ff66)}
+}
+@media(prefers-reduced-motion:reduce){
+  .gate .brand-mark{animation:none;will-change:auto}
+}
+
