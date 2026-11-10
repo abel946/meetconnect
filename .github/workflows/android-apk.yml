@@ -3,11 +3,13 @@ name: Build MeetConnect Android APK
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - "src/**"
       - "public/**"
       - "package.json"
+      - "package-lock.json"
       - "capacitor.config.json"
       - ".github/workflows/android-apk.yml"
 
@@ -18,31 +20,41 @@ jobs:
   build-android:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Check out source
         uses: actions/checkout@v4
-      - name: Set up Node
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
+          cache: npm
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
-      - name: Install web and Capacitor dependencies
+          java-version: "21"
+
+      - name: Install dependencies
         run: npm install
-      - name: Build web bundle
+
+      - name: Build web app
         run: npm run build
-      - name: Generate Android project
-        run: npx cap add android
-      - name: Sync Android project
-        run: npx cap sync android
-      - name: Build installable debug APK
+
+      - name: Create Android project if needed
         run: |
-          cd android
+          if [ ! -d android ]; then
+            npx cap add android
+          fi
+          npx cap sync android
+
+      - name: Build installable debug APK
+        working-directory: android
+        run: |
           chmod +x gradlew
           ./gradlew assembleDebug
-      - name: Upload APK
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: MeetConnect-Android-APK
