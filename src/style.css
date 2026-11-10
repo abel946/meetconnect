@@ -271,3 +271,61 @@ body{background:radial-gradient(ellipse at 12% 12%,#242038 0,transparent 28%),#1
   .gate .brand-mark{width:66px;height:66px;flex-basis:66px;border-radius:20px}
 }
 
+
+
+/* Welcome-screen hero: replace the decorative tiles with the approved MeetConnect logo */
+.hero-logo-wrap{
+  position:relative;
+  z-index:1;
+  width:164px;
+  height:164px;
+  display:grid;
+  place-items:center;
+  animation:meetconnect-logo-float 4.2s ease-in-out infinite;
+  filter:drop-shadow(0 12px 24px #0005);
+}
+.hero-logo{
+  position:relative;
+  z-index:2;
+  display:block;
+  width:142px;
+  height:142px;
+  object-fit:cover;
+  border-radius:34px;
+  border:2px solid #ffffff35;
+  box-shadow:0 0 22px #ff91bd66,0 0 52px #b89aff35;
+  animation:meetconnect-logo-glow 3.6s ease-in-out infinite;
+}
+.logo-halo{
+  position:absolute;
+  width:154px;
+  height:154px;
+  border-radius:42px;
+  background:linear-gradient(135deg,#ff9dc8aa,#bba2ff88,#8ce5e0aa);
+  filter:blur(20px);
+  opacity:.55;
+  animation:meetconnect-halo 3.6s ease-in-out infinite;
+}
+.gate-art .orbit-a{width:190px;height:190px;animation:meetconnect-orbit 18s linear infinite}
+.gate-art .orbit-b{width:230px;height:230px;animation:meetconnect-orbit 26s linear infinite reverse}
+@keyframes meetconnect-logo-float{
+  0%,100%{transform:translateY(3px) scale(1)}
+  50%{transform:translateY(-9px) scale(1.035)}
+}
+@keyframes meetconnect-logo-glow{
+  0%,100%{box-shadow:0 0 18px #ff91bd55,0 0 38px #b89aff22}
+  50%{box-shadow:0 0 30px #ff91bd99,0 0 64px #b89aff66}
+}
+@keyframes meetconnect-halo{
+  0%,100%{transform:scale(.92);opacity:.38}
+  50%{transform:scale(1.12);opacity:.78}
+}
+@keyframes meetconnect-orbit{to{transform:rotate(360deg)}}
+@media(max-height:720px){
+  .hero-logo-wrap{width:140px;height:140px}
+  .hero-logo{width:120px;height:120px;border-radius:29px}
+  .logo-halo{width:132px;height:132px}
+}
+@media(prefers-reduced-motion:reduce){
+  .hero-logo-wrap,.hero-logo,.logo-halo,.gate-art .orbit-a,.gate-art .orbit-b{animation:none}
+}
