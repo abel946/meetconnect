@@ -44,3 +44,11 @@
 
 .request-venue{margin:10px 0;padding:11px 13px;border:1px solid rgba(100,150,220,.22);border-radius:12px;background:rgba(50,90,150,.08)}
 .request-venue>b{font-size:12px}.request-venue p{margin:5px 0;font-size:13px}
+
+
+/* Nearby GPS availability */
+.gps-panel { border: 1px solid rgba(76, 112, 168, .22); background: linear-gradient(145deg, #ffffff, #f4f7ff); }
+.gps-panel .panel-title { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.gps-panel .panel-title h3 { display:flex; align-items:center; gap:8px; }
+.gps-panel p { color: #65718a; line-height: 1.55; font-size: .92rem; }
+.gps-accuracy { display:block; color:#78849a; margin-top:9px; font-size:.78rem; }
