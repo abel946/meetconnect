@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { createClient } from '@supabase/supabase-js';
-import { Camera, CalendarCheck, ChevronRight, HeartHandshake, ShieldCheck, Wallet, UserRound, LogOut, RefreshCw, CheckCircle2, XCircle, Video, Upload } from 'lucide-react';
+import { Camera, CalendarCheck, ChevronRight, HeartHandshake, ShieldCheck, Wallet, UserRound, LogOut, RefreshCw, CheckCircle2, XCircle, Video, Upload, MapPin, Navigation } from 'lucide-react';
 import './style.css';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -30,6 +30,11 @@ function App() {
   const [saving,setSaving] = React.useState(false);
   const [uploading,setUploading] = React.useState(false);
   const [refreshing,setRefreshing] = React.useState(false);
+  const [gpsSharing,setGpsSharing] = React.useState(false);
+  const [gpsBusy,setGpsBusy] = React.useState(false);
+  const [gpsPosition,setGpsPosition] = React.useState(null);
+  const gpsWatchRef = React.useRef(null);
+  const gpsLastWriteRef = React.useRef(0);
   const say = (m) => { setNotice(m); window.scrollTo({top:0,behavior:'smooth'}); };
   const patch = (key,value) => setForm(old=>({...old,[key]:value}));
 
@@ -212,7 +217,64 @@ function App() {
     say(nextStatus==='accepted'?'Request accepted.':'Request declined.');
     await loadWorkspace(session);
   }
+  async function writeGpsPosition(position, sharing = true) {
+    if (!session?.user?.id || !supabase) return;
+    const latitude = position.coords.latitude;
+    const longitude = position.coords.longitude;
+    const { error } = await supabase.from('employee_live_locations').upsert({
+      employee_id: session.user.id,
+      latitude,
+      longitude,
+      is_available: sharing,
+      sharing_enabled: sharing,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'employee_id' });
+    if (error) throw error;
+    setGpsPosition({ latitude, longitude, accuracy: position.coords.accuracy });
+  }
+  async function stopGpsSharing(showMessage = true) {
+    if (gpsWatchRef.current !== null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(gpsWatchRef.current);
+      gpsWatchRef.current = null;
+    }
+    if (session?.user?.id && supabase) {
+      const { error } = await supabase.from('employee_live_locations')
+        .update({ is_available: false, sharing_enabled: false, updated_at: new Date().toISOString() })
+        .eq('employee_id', session.user.id);
+      if (error && showMessage) return say('Could not switch off GPS availability: ' + error.message);
+    }
+    setGpsSharing(false);
+    if (showMessage) say('You are now offline. Your location is no longer shown to nearby customers.');
+  }
+  async function startGpsSharing() {
+    if (status !== 'approved') return say('GPS availability is available after MeetConnect admin approves your employee profile.');
+    if (!navigator.geolocation) return say('This device or browser does not support GPS location.');
+    setGpsBusy(true);
+    try {
+      const firstPosition = await new Promise((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, {
+        enableHighAccuracy: true, maximumAge: 2000, timeout: 15000
+      }));
+      await writeGpsPosition(firstPosition, true);
+      gpsLastWriteRef.current = Date.now();
+      setGpsSharing(true);
+      gpsWatchRef.current = navigator.geolocation.watchPosition(async position => {
+        if (Date.now() - gpsLastWriteRef.current < 4000) return;
+        gpsLastWriteRef.current = Date.now();
+        try { await writeGpsPosition(position, true); }
+        catch (error) { say('GPS update failed: ' + (error?.message || 'Check your connection.')); }
+      }, error => {
+        say(error.code === 1 ? 'Location permission was denied. Enable location permission to appear nearby.' : 'GPS signal is unavailable. Move to an open area and try again.');
+        stopGpsSharing(false);
+      }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 });
+      say('You are online. Nearby customers can see an approximate live map marker while you share availability.');
+    } catch (error) {
+      say(error?.code === 1 ? 'Please allow location access to share availability.' : 'Could not get your GPS location. Check that device location is turned on.');
+    } finally {
+      setGpsBusy(false);
+    }
+  }
   async function signOut() {
+    await stopGpsSharing(false);
     if (supabase) await supabase.auth.signOut();
     setSession(null); setPassword(''); setStatus(null); setRequests([]); setForm(emptyForm); setNotice('You have signed out.');
   }
@@ -221,7 +283,7 @@ function App() {
   if (!supabase) return <main><Header/><section className="hero"><small>EMPLOYEE SPACE</small><h1>Work with <em>confidence.</em></h1><p>Secure employee registration and profile management.</p></section><div className="notice"><ShieldCheck/><span><b>Backend setup needed</b><p>Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in the employee Vercel project, then redeploy.</p></span></div></main>;
   if (!session) return <main><Header/><section className="hero"><small>EMPLOYEE SPACE</small><h1>Your work.<br/><em>Your future.</em></h1><p>Register or sign in using your account name and password.</p><span className="status">● Account name + password · 18+ required</span></section>{notice&&<div className="notice"><ShieldCheck/><span>{notice}</span></div>}<section className="panel auth-panel"><div className="auth-switch"><button type="button" className={authMode==='register'?'on':''} onClick={()=>{setAuthMode('register');setNotice('');}}>Register</button><button type="button" className={authMode==='login'?'on':''} onClick={()=>{setAuthMode('login');setNotice('');}}>Sign in</button></div><h3>{authMode==='register'?'Create employee account':'Employee sign in'}</h3><p>{authMode==='register'?'Choose a unique account name and password. Confirm you are 18+.':'Enter the account name and password you registered with.'}</p><label>Account name<input value={accountName} onChange={e=>setAccountName(e.target.value)} placeholder="e.g. abebe2026" autoComplete="username" maxLength={30}/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} placeholder="At least 8 characters" autoComplete={authMode==='register'?'new-password':'current-password'}/></label>{authMode==='register'&&<label className="age-confirm"><input type="checkbox" checked={ageConfirmed} onChange={e=>setAgeConfirmed(e.target.checked)}/><span>I confirm that I am 18 years old or older. I understand my employee profile will remain hidden until MeetConnect admin approves it.</span></label>}<button className="submit" disabled={authBusy} onClick={authenticate}>{authBusy?'Please wait…':authMode==='register'?'Create account →':'Sign in →'}</button><p className="auth-footnote">Use a unique account name (3–30 characters). Keep your password private.</p></section><footer>MeetConnect · Employee portal · Account name registration</footer></main>;
   return <main><header><HeaderBrand/><button className="avatar" onClick={signOut} title="Sign out"><LogOut size={17}/></button></header><section className="hero"><small>EMPLOYEE SPACE</small><h1>Work with <em>confidence.</em></h1><p>Manage your service profile, requests and earnings in one place.</p><span className={'status '+(status==='approved'?'approved':'')}>● {status==='approved'?'Approved employee':status==='pending'?'Pending admin approval':'Complete your employee profile'}</span></section>{notice&&<button className="notice notice-message" onClick={()=>setNotice('')}><ShieldCheck/><span>{notice}</span> ×</button>}<nav>{['Overview','Requests','Profile'].map(x=><button key={x} className={tab===x?'on':''} onClick={()=>setTab(x)}>{x}</button>)}</nav>
-    {tab==='Overview'&&<><div className="prices"><article><small>YOUR SHORT PRICE</small><h2>{money(form.shortPrice)} <i>ETB</i></h2><small>10% platform commission: {money(Number(form.shortPrice)*.1)} ETB</small><p>You receive {money(Number(form.shortPrice)*.9)} ETB before payment fees/taxes.</p></article><article><small>YOUR LONG PRICE</small><h2>{money(form.longPrice)} <i>ETB</i></h2><small>10% platform commission: {money(Number(form.longPrice)*.1)} ETB</small><p>You receive {money(Number(form.longPrice)*.9)} ETB before payment fees/taxes.</p></article></div><section className="panel"><h3>Your workspace</h3>{[[CalendarCheck,'Service requests','Review and manage customer requests','Requests'],[Camera,'Your employee profile','Edit your bio, service area and prices','Profile'],[Wallet,'Earnings overview','See your price and commission split','Profile'],[ShieldCheck,'Safety & support','Keep personal information private','Profile']].map(([I,a,b,d])=><button className="row" key={a} onClick={()=>setTab(d)}><I/><span><b>{a}</b><small>{b}</small></span><ChevronRight/></button>)}</section><div className="notice"><HeartHandshake/><span><b>Your safety comes first</b><p>Keep service requests inside MeetConnect. Never share private location details publicly.</p></span></div></>}
+    {tab==='Overview'&&<><section className="panel gps-panel"><div className="panel-title"><h3><MapPin size={18}/> Nearby GPS availability</h3><span className={'request-status '+(gpsSharing?'accepted':'')}>{gpsSharing?'ONLINE':'OFFLINE'}</span></div><p>Turn this on only when you are ready to receive nearby requests. Customers see an approximate moving marker within 5 km (expandable to 20 km). Your exact coordinates are shared only with the other participant after a connection is accepted.</p>{gpsPosition&&<small className="gps-accuracy">GPS accuracy: about {Math.round(gpsPosition.accuracy||0)} m</small>}<button className="submit" disabled={gpsBusy||status!=='approved'} onClick={gpsSharing?()=>stopGpsSharing():startGpsSharing}>{gpsBusy?'Checking GPS…':gpsSharing?'Go offline':'Go online & share location'}</button>{status!=='approved'&&<small className="gps-accuracy">Available after admin approval.</small>}<small className="gps-accuracy">Keep this app open while online. Background tracking will be added with the Android foreground-location service.</small></section><div className="prices"><article><small>YOUR SHORT PRICE</small><h2>{money(form.shortPrice)} <i>ETB</i></h2><small>10% platform commission: {money(Number(form.shortPrice)*.1)} ETB</small><p>You receive {money(Number(form.shortPrice)*.9)} ETB before payment fees/taxes.</p></article><article><small>YOUR LONG PRICE</small><h2>{money(form.longPrice)} <i>ETB</i></h2><small>10% platform commission: {money(Number(form.longPrice)*.1)} ETB</small><p>You receive {money(Number(form.longPrice)*.9)} ETB before payment fees/taxes.</p></article></div><section className="panel"><h3>Your workspace</h3>{[[CalendarCheck,'Service requests','Review and manage customer requests','Requests'],[Camera,'Your employee profile','Edit your bio, service area and prices','Profile'],[Wallet,'Earnings overview','See your price and commission split','Profile'],[ShieldCheck,'Safety & support','Keep personal information private','Profile']].map(([I,a,b,d])=><button className="row" key={a} onClick={()=>setTab(d)}><I/><span><b>{a}</b><small>{b}</small></span><ChevronRight/></button>)}</section><div className="notice"><HeartHandshake/><span><b>Your safety comes first</b><p>Keep service requests inside MeetConnect. Never share private location details publicly.</p></span></div></>}
     {tab==='Requests'&&<section className="panel"><div className="panel-title"><h3>Service requests</h3><button className="icon-btn" onClick={()=>loadWorkspace(session)}><RefreshCw size={16}/></button></div>{requests.length===0?<p>No service requests yet. New customer requests will appear here.</p>:requests.map(r=><article className="request-card" key={r.id}><div className="request-top"><b>{r.customer?.display_name||'MeetConnect customer'}</b><span className={'request-status '+r.status}>{r.status}</span></div><p>{r.session_type==='short'?'Short session':'Long session'} · {money(r.agreed_price_etb)} ETB</p><div className="request-venue"><b>Meeting place</b><p>{r.venue_type==='hotel'?'Hotel':r.venue_type==='club_bar'?'Club / Bar':'Not specified'}: {r.venue_name||'—'}</p>{r.venue_type==='hotel'&&<p>Room: {r.room_name||'—'} · Room no.: {r.room_number||'—'}</p>}{r.venue_type==='club_bar'&&r.site_position&&<p>Site position: {r.site_position==='right_edge'?'Right edge':r.site_position==='left_edge'?'Left edge':'Middle'}</p>}</div><small>{new Date(r.created_at).toLocaleString()}</small>{r.status==='pending'&&<div className="request-actions"><button className="accept" onClick={()=>updateRequest(r.id,'accepted')}><CheckCircle2 size={16}/> Accept</button><button className="decline" onClick={()=>updateRequest(r.id,'declined')}><XCircle size={16}/> Decline</button></div>}</article>)}</section>}
     {tab==='Profile'&&<form className="panel" onSubmit={saveProfile}><h3>Your profile & media</h3><p>Upload a clear profile photo and an optional profile video no longer than 10 seconds. Your profile stays hidden until admin approval.</p>
     <div className="media-grid"><div className="media-card"><b><Camera size={17}/> Profile photo</b>{form.avatarUrl?<img className="media-preview photo-preview" src={form.avatarUrl} alt="Profile photo preview"/>:<div className="media-placeholder"><UserRound size={30}/><span>No photo uploaded</span></div>}<label className="file-pick"><Upload size={15}/> {uploading?'Uploading…':'Choose photo'}<input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} onChange={e=>{const file=e.target.files?.[0];uploadMedia(file,'photo');e.target.value='';}}/></label><small>JPG, PNG or WebP · Max 5 MB</small></div><div className="media-card"><b><Video size={17}/> Short profile video</b>{form.videoUrl?<video className="media-preview" src={form.videoUrl} controls playsInline/>:<div className="media-placeholder"><Video size={30}/><span>No video uploaded</span></div>}<label className="file-pick"><Upload size={15}/> {uploading?'Uploading…':'Choose video'}<input type="file" accept="video/mp4,video/webm,video/quicktime" disabled={uploading} onChange={e=>{const file=e.target.files?.[0];uploadMedia(file,'video');e.target.value='';}}/></label><small>Max 10 seconds · MP4/WebM/MOV · Max 20 MB</small></div></div>
