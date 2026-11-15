@@ -15,7 +15,12 @@ create table if not exists public.employee_live_locations (
 alter table public.employee_live_locations enable row level security;
 
 revoke all on public.employee_live_locations from anon, authenticated;
-grant insert, update on public.employee_live_locations to authenticated;
+grant select, insert, update on public.employee_live_locations to authenticated;
+
+create policy "employees read own live location"
+  on public.employee_live_locations
+  for select to authenticated
+  using (employee_id = (select auth.uid()));
 
 drop policy if exists "employees manage own live location" on public.employee_live_locations;
 create policy "employees insert own live location"
